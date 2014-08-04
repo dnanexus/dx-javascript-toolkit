@@ -24,8 +24,8 @@ standardized across all common browsers. See the libraries below for the exact d
 Libraries / Docs
 ----------------
 
-* [API](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/docs/api.md) - Basic javascript bindings for making API calls
-* [Upload](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/docs/upload.md) - Adds ability to upload files to the platform
+* [API](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/docs/api.md) - Basic javascript bindings for making API calls
+* [Upload](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/docs/upload.md) - Adds ability to upload files to the platform
 
 Examples
 --------
@@ -33,6 +33,6 @@ Examples
 The examples below are intended to demonstrate how to use the libraries. The examples were built quickly and are
 not meant to demonstrate how to properly build a web application/component.
 
-* [Getting Started](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/examples/getting-started) - Basic usage, making an API call
-* [Basic file upload](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/examples/uploading-files-basic) - Bare bones uploading of files
-* [Advanced file upload](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/examples/uploading-files-progress) - Rich file uploading with all the bells and whistles
+* [Getting Started](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/examples/getting-started) - Basic usage, making an API call
+* [Basic file upload](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/examples/uploading-files-basic) - Bare bones uploading of files
+* [Advanced file upload](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/examples/uploading-files-progress) - Rich file uploading with all the bells and whistles

@@ -8,7 +8,7 @@ DX.FileUpload Documentation
 --------------------
 
 Links from code example
-* [ResourcePool](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/src/common/resource_pool.coffee)
+* [ResourcePool](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/src/common/resource_pool.coffee)
 
 ```javascript
   /*
@@ -102,5 +102,5 @@ Examples
 
 Note: Due to the browser security model, these examples must be loaded from a webserver as opposed to a file url.
 
-* [Basic file upload](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/examples/uploading-files-basic) - Bare bones uploading of files
-* [Advanced file upload](https://github.com/dnanexus/dx-membrane-toolkit/blob/master/examples/uploading-files-progress) - Rich file uploading with all the bells and whistles
+* [Basic file upload](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/examples/uploading-files-basic) - Bare bones uploading of files
+* [Advanced file upload](https://github.com/dnanexus/dx-javascript-toolkit/blob/master/examples/uploading-files-progress) - Rich file uploading with all the bells and whistles
