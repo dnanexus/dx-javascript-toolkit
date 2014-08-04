@@ -1,0 +1,165 @@
+<html>
+  <head>
+    <title>DNAnexus File Uploader</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="spark-md5-0.0.5.min.js"></script>
+    <script src="operative-0.3.2.min.js"></script>
+    <script src="dnanexus-upload-0.0.1.js"></script>
+    <style type='text/css'>
+      #upload-list {
+        font-family: courier;
+      }
+    </style>
+  </head>
+  <body>
+    <div id='upload-content'>
+      <div>
+        Folder: <input type='text' id='folder' value='/'>
+      </div>
+      <input type='file' multiple=multiple>
+      <ul id='upload-list'></ul>
+    </div>
+
+    <div>Throughput: <span id='throughput'>Select files...</span></div>
+    <div>Elapsed time: <span id='time'>0</span> seconds</div>
+
+    <div>
+      <button id='pause-button' type='button' disabled>Pause</button>
+      <button id='resume-button' type='button' disabled>Resume</button>
+      <button id='abort-button' type='button' disabled>Abort</button>
+    </div>
+
+    <script>
+      var authToken = "AUTH_TOKEN_GOES_HERE";
+      var projectID = "PROJECT_ID_GOES_HERE";
+      var options = {
+        projectID: projectID,
+        sparkMD5Src: $("head").find("script[src*='spark-md5']").attr('src')
+      };
+
+      var bytesUploaded = [];
+      var bytesTotal = 0;
+      var numChunksReport = 25;
+      var fileUploads = [];
+      var filesClosed = 0;
+
+      var startTime = null;
+      var upload = null;
+
+      $("#pause-button").on('click', function() {
+        $("#pause-button").prop('disabled', true);
+        $("#resume-button").prop('disabled', false);
+        upload.pause();
+      });
+
+      $("#resume-button").on('click', function() {
+        $("#resume-button").prop('disabled', true);
+        $("#pause-button").prop('disabled', false);
+        upload.resume();
+      });
+
+      $("#abort-button").on('click', function() {
+        $("#resume-button").prop('disabled', true);
+        $("#pause-button, #abort-button").prop('disabled', true);
+        upload.abort().done(function (abortedIDs) {
+          for (var i = 0; i < abortedIDs.length; ++i) {
+            updateUploadAmount(abortedIDs[i], "Aborted", 0);
+            }
+        });
+      });
+
+      function updatePerformanceMetrics() {
+        var secondsRunning = Math.round((Date.now() - startTime) / 1000);
+
+        var totalBytesUploaded = 0;
+        for (var fileID in bytesUploaded) {
+          totalBytesUploaded += bytesUploaded[fileID];
+        }
+
+        var megaBytesPerSecond = ((totalBytesUploaded / 1048576) / secondsRunning).toFixed(2);
+        $("#throughput").text(megaBytesPerSecond + " MB/s");
+        $("#time").text(secondsRunning);
+      }
+
+      function updateUploadAmount(fileID, msg, numChunksDone) {
+        $("#" + fileID + " .pct").text(msg);
+
+        var chunksDoneMsg = ""
+        for (var i = 0; i < numChunksReport; ++i) {
+          if (i < numChunksDone) {
+            chunksDoneMsg += "&#183;"
+          } else {
+            chunksDoneMsg += "&nbsp;"
+          }
+        }
+
+        $("#" + fileID + " .chunksDone").html(chunksDoneMsg);
+      }
+
+      function monitorProgress(upload) {
+        var checksumTracker = upload.monitorChecksumProgress();
+        var uploadTracker = upload.monitorUploadProgress();
+        var fileID = upload.fileID;
+
+        var onChecksumProgress = function(data) {
+          $("#" + fileID + " .checksums").text(data.partsDone + "/" + data.partsTotal);
+        }
+
+        var onUploadProgress = function(data) {
+          var msg = null;
+          var chunksDone = 0;
+
+          bytesUploaded[upload.fileID] = data.bytesUploaded;
+          msg = data.bytesDone + "/" + data.bytesTotal;
+          var chunkSize = upload.file.size / numChunksReport;
+          chunksDone = Math.floor(data.bytesDone / chunkSize);
+
+          updateUploadAmount(fileID, msg, chunksDone);
+          updatePerformanceMetrics();
+        };
+
+        var onUploadDone = function() {
+          msg = "Closing";
+          updateUploadAmount(fileID, msg, numChunksReport);
+
+          upload.monitorFileClosingProgress().done(function() {
+            msg = "Done";
+            updateUploadAmount(fileID, msg, numChunksReport);
+            updatePerformanceMetrics();
+
+            if (++filesClosed === fileUploads.length) {
+              $("#pause-button, #abort-button").prop("disabled", true);
+            }
+          });
+        };
+
+        checksumTracker.progress(onChecksumProgress).done(onChecksumProgress);
+        uploadTracker.progress(onUploadProgress).done(onUploadDone);
+      }
+
+      $("input[type=file]").change(function(e) {
+        var fileList = e.target.files;
+        options.folder = $("#folder").val();
+
+        upload = new DX.Upload(authToken, fileList, options);
+
+        startTime = Date.now();
+
+        upload.start().done(function(uploads) {
+          fileUploads = uploads;
+          var uploadList = $("#upload-list");
+          for (var i = 0; i < uploads.length; ++i) {
+            var upload = uploads[i];
+            bytesTotal += upload.size;
+            var checksums = " Checksums: <span class='checksums'>#/#</span>";
+            var percent = "Data: [<span class='chunksDone'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>] <span class='pct'>Waiting...</span>";
+            uploadList.append("<li id='" + upload.fileID + "'>" + upload.fileID + checksums + " " + percent + " (" + upload.file.name + ")");
+            monitorProgress(upload);
+          }
+
+          $("#abort-button, #pause-button").prop("disabled", false);
+        });
+      })
+    </script>
+  </body>
+</html>

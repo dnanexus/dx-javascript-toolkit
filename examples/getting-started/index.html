@@ -1,0 +1,21 @@
+<html>
+  <head>
+    <title>Basic DNAnexus Integration</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="dnanexus-0.0.1.js"></script>
+  </head>
+  <body>
+    <p>
+      Your name is: <span id='name'>Loading...</span>
+    </p>
+    <script>
+      var authToken = "AUTH_TOKEN_GOES_HERE";
+      var userID = "USER_ID_GOES_HERE"; // Insert userID, e.g. user-bobsmith
+
+      var api = new DX.Api(authToken);
+      api.call(userID, "describe").done(function(data) {
+        $("#name").text([data.first, data.last].join(" "))
+      });
+    </script>
+  </body>
+</html>

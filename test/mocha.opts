@@ -1,0 +1,5 @@
+--recursive
+--require coffee-script
+--compilers coffee:coffee-script/register
+--require test/test_helper.coffee
+-R spec

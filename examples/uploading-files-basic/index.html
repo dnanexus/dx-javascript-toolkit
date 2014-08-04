@@ -1,0 +1,51 @@
+<html>
+  <head>
+    <title>DNAnexus File Uploader</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <script src="spark-md5-0.0.5.min.js"></script>
+    <script src="operative-0.3.2.min.js"></script>
+    <script src="dnanexus-upload-0.0.1.js"></script>
+    <style type='text/css'>
+      #upload-list {
+        font-family: courier;
+      }
+    </style>
+  </head>
+  <body>
+    <div id='upload-content'>
+      <input type='file' multiple=multiple>
+      <ul id='upload-list'></ul>
+    </div>
+
+    <script>
+      var authToken = "AUTH_TOKEN_GOES_HERE";
+      var projectID = "PROJECT_ID_GOES_HERE";
+      var options = {
+        projectID: projectID,
+        sparkMD5Src: $("head").find("script[src*='spark-md5']").attr('src')
+      };
+
+      function monitorProgress(upload) {
+        var fileID = upload.fileID;
+        upload.monitorUploadProgress().done(function() {
+          $("#" + fileID + " .status").text("Done");
+        });
+      }
+
+      $("input[type=file]").change(function(e) {
+        var fileList = e.target.files;
+        var upload = new DX.Upload(authToken, fileList, options);
+
+        upload.start().done(function(uploads) {
+          var uploadList = $("#upload-list");
+          for (var i = 0; i < uploads.length; ++i) {
+            var upload = uploads[i];
+            uploadList.append("<li id='" + upload.fileID + "'>" + upload.file.name + " - " + upload.fileID +
+                              " <span class='status'>Uploading...</span></li>");
+            monitorProgress(upload);
+          }
+        });
+      })
+    </script>
+  </body>
+</html>
