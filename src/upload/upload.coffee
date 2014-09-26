@@ -38,7 +38,7 @@ class Upload
     @uploadConcurrency = options.uploadConcurrency ? 10
 
     @projectID = options.projectID
-    @api = new Api(authToken, options)
+    @api = new Api(@_authToken, options)
 
     workers = (new MD5Worker(options.sparkMD5Src) for i in [0...checksumConcurrency])
     @workerPool = new ResourcePool(workers)

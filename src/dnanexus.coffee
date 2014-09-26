@@ -1,3 +1,3 @@
 # Establish the global export
-window.DX =
-  Api: require('./api.coffee')
+window.DX ?= {}
+window.DX.Api = require('./api.coffee')

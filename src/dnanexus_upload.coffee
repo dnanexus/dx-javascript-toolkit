@@ -1,4 +1,4 @@
 # Establish the global export
-window.DX =
-  Api: require('./api.coffee')
-  Upload: require('./upload/upload.coffee')
+window.DX ?= {}
+window.DX.Api = require('./api.coffee')
+window.DX.Upload = require('./upload/upload.coffee')
