@@ -1,6 +1,3 @@
-# AWS Constraint
-MAX_PARTS = 10000
-
 # TODO: Abort, Cancel, Pause, Resume, Tags, Properties
 
 Api = require('../api.coffee')

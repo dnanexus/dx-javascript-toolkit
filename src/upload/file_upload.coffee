@@ -1,3 +1,6 @@
+# AWS Constraint
+MAX_PARTS = 10000
+
 class FileUpload
   computeSignature: (file, partSize) ->
     [file.size, file.lastModifiedDate.getTime(), 0, partSize, file.name].join(" ")
@@ -72,6 +75,9 @@ class FileUpload
       if !options[key]?
         throw new Error("Required parameter #{key} is not specified")
       this[key] = options[key]
+
+    # Make sure we do not exceed MAX_PARTS
+    @partSize = Math.max(Math.ceil(@file.size / MAX_PARTS), @partSize)
 
     @_uploadProgress = $.Deferred()
     @_checksumProgress = $.Deferred()
