@@ -144,6 +144,10 @@ class FileUpload
       # Begin computing MD5s
       do (part) =>
         @workerPool.acquire().done((worker) =>
+          if @_aborted
+            @workerPool.release(worker)
+            return
+
           # Get the file slicer, and create the web worker to compute the MD5 checksum
           slicer = @file.slice ? @file.webkitSlice ? @file.mozSlice
           slice = slicer.call(@file, part.start, part.stop)
@@ -173,7 +177,7 @@ class FileUpload
         )
 
   _closeFile: () ->
-    return if @_closing || @_closed
+    return if @_closing || @_closed || @_aborted
     @_closing = true
 
     doCloseFile = () =>
