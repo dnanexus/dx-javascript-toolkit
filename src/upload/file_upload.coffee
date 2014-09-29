@@ -2,6 +2,15 @@
 MAX_PARTS = 10000
 
 class FileUpload
+  # A signature is in the form
+  # <File size bytes> <Modified timestamp ms> <Value 0 or 1 indicating to compress> <chunk_size in bytes>
+  # <local_file_name>
+  #
+  # We are using the same signature as the upload agent, but it would be ideal to storage the part size separate from
+  # the signature so we could resume partial uploads with different part sizes than our native part size. This would
+  # allow for seamless transition between the upload agent and the web uploader without having to specify a part size
+  # for the upload agent.
+  #
   computeSignature: (file, partSize) ->
     [file.size, file.lastModifiedDate.getTime(), 0, partSize, file.name].join(" ")
 
@@ -90,6 +99,7 @@ class FileUpload
     @_bytesUploaded = 0
     @_bytesResumed = 0
 
+    @_aborted = false
     @_closing = false
     @_closed = false
 
@@ -214,7 +224,7 @@ class FileUpload
 
     if @_uploadQueue.length > 0
       @uploadPool.acquire().done((token) =>
-        if @_uploadQueue.length == 0
+        if @_uploadQueue.length == 0 || @_aborted
           @uploadPool.release(token)
           return
 
@@ -222,6 +232,7 @@ class FileUpload
 
         # Begin tracking upload progress for this part, and make the API call
         @_partUploadProgress[part.index] = 0
+
         call = @api.uploadFilePart(@fileID, part.index, part.slice, part.md5)
         @_uploadCalls[part.index] = call
 
@@ -273,13 +284,17 @@ class FileUpload
     return @_closingProgress.promise()
 
   abort: () ->
-    if @_closed
-      return $.Deferred().reject({reason: "File Closed"})
+    return $.Deferred().resolve(@fileID) if @_aborted
+    return $.Deferred().reject({reason: "File Closed"}) if @_closed
+    @_aborted = true
 
+    @_uploadQueue = []
     for index, apiCall of @_uploadCalls
       apiCall.abort()
+    @_uploadsCalls = {}
 
     @api.call(@projectID, "removeObjects", {objects: [@fileID]}).then(() =>
+      @_uploadProgress.reject()
       return @fileID
     )
 

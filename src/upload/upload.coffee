@@ -37,8 +37,8 @@ class Upload
     @projectID = options.projectID
     @api = new Api(@_authToken, options)
 
-    workers = (new MD5Worker(options.sparkMD5Src) for i in [0...checksumConcurrency])
-    @workerPool = new ResourcePool(workers)
+    @workers = (new MD5Worker(options.sparkMD5Src) for i in [0...checksumConcurrency])
+    @workerPool = new ResourcePool(@workers)
 
     uploadResources = ("UploadToken #{i}" for i in [0...@uploadConcurrency])
     @uploadPool = new ResourcePool(uploadResources)
@@ -104,6 +104,16 @@ class Upload
       )
 
     return status
+
+  ###
+  # Cleans up the upload and destroys all resources
+  ###
+  destroy: () ->
+    # Destroy the web workers
+    worker.terminate() for worker in @workers
+
+    @workerPool.close()
+    @uploadPool.close()
 
   ###
     Pauses all uploads. No new checksums will be computed, no new upload parts will begin, and all parts currently being uploaded will
