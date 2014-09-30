@@ -14,33 +14,45 @@ class FileUpload
   computeSignature: (file, partSize) ->
     [file.size, file.lastModifiedDate.getTime(), 0, partSize, file.name].join(" ")
 
-  createFile: (file, api, partSize, projectID, folder) ->
-    options =
-      folder: folder
+  #
+  # options:
+  #   folder: The folder to place the file in
+  #   tags: An array of tags
+  #   properties: An object literal with the properties for the object
+  ##
+  createFile: (file, api, partSize, projectID, options = {}) ->
+    properties = $.extend(options.properties, {
+      ".system-fileSignature": @computeSignature(file, partSize)
+    })
+
+    newFileOptions =
+      folder: options.folder
       name: file.name
       project: projectID
-      properties:
-        ".system-fileSignature": @computeSignature(file, partSize)
+      properties: properties
 
-    api.call("file", "new", options).pipe((resp) ->
+    if options.tags?.length > 0
+      newFileOptions.tags = options.tags
+
+    api.call("file", "new", newFileOptions).then((resp) ->
       {
         fileID: resp.id
       }
     )
 
-  findOrCreateFile: (file, api, partSize, projectID, folder) ->
+  findOrCreateFile: (file, api, partSize, projectID, options = {}) ->
     searchCriteria =
       class: "file"
       state: "open"
       describe: true
       properties:
-       ".system-fileSignature": @computeSignature(file, partSize)
+        ".system-fileSignature": @computeSignature(file, partSize)
       scope:
         project: projectID
-        folder: folder
+        folder: options.folder
 
     makeNewFile = () =>
-      @createFile(file, api, partSize, projectID, folder)
+      @createFile(file, api, partSize, projectID, options)
 
     onSearchSuccess = (data) ->
       return data
@@ -74,6 +86,8 @@ class FileUpload
   #   # Optional
   #   folder: The folder to upload the file into. Default: "/"
   #   partSize: The size of each part, in bytes. Default: 10485760
+  #   tags: An array of strings that will be added as tags on all of the uploaded files
+  #   properties: An object literal which will populate the properties of all uploaded files.
   ###
   constructor: (@file, options = {}) ->
     options = $.extend({
@@ -114,7 +128,12 @@ class FileUpload
     @_partUploadProgress = []
 
     # Find the file to resume, or create a new file
-    @fileCreationStatus = FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, @folder)
+    fileCreationOptions =
+      folder: @folder
+      tags: options.tags
+      properties: options.properties
+
+    @fileCreationStatus = FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, fileCreationOptions)
     @fileCreationStatus.done((data) =>
       existingParts = data.parts ? {}
       @fileID = data.fileID

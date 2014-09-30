@@ -10,7 +10,13 @@ class Upload
     Creates a new upload instance
 
     authToken: The auth token which grants access to the DNAnexus platform [required]
-    files: A list of files to upload
+    files: Either an array of files, or an array of objects with each object having a key "file" and a key "options". Supported
+           options are "folder", "properties", and "tags"
+
+           NOTE: Tags and properties will not be applied to resumed uploads. Resumed uploads will keep their original tags
+                 and properties.
+           tags: An array of strings that will be added as tags on all of the uploaded files
+           properties: An object literal which will populate the properties of all uploaded files.
 
     options:
       projectID: The ID of the project to upload the files into. [required]
@@ -23,6 +29,8 @@ class Upload
 
       checksumConcurrency: How many web workers to create to compute MD5s. Default: 10
       uploadConcurrency: The number of concurrent uploads to perform. Default: 10
+
+
   ###
   constructor: (@_authToken, @files, options = {}) ->
     throw new Error("projectID must be specified") unless options.projectID?.length > 0
@@ -51,7 +59,7 @@ class Upload
     status = $.Deferred()
     @uploads = []
 
-    uploadOptions =
+    defaultUploadOptions =
       partSize: @partSize
       workerPool: @workerPool
       uploadPool: @uploadPool
@@ -60,7 +68,14 @@ class Upload
       folder: @folder
 
     for file, i in @files
-      @uploads[i] = new FileUpload(file, uploadOptions)
+      if $.isPlainObject(file) && file.file? && file.options?
+        fileToUpload = file.file
+        uploadOptions = $.extend(defaultUploadOptions, file.options)
+      else
+        fileToUpload = file
+        uploadOptions = defaultUploadOptions
+
+      @uploads[i] = new FileUpload(fileToUpload, uploadOptions)
 
     startUpload = (index) =>
       upload = @uploads[index]
