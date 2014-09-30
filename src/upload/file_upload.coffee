@@ -157,6 +157,9 @@ class FileUpload
     )
 
   _computeChecksums: () ->
+    totalChecksums = @_checksumQueue.length
+    checksumsDone = 0
+
     while @_checksumQueue.length > 0
       part = @_checksumQueue.shift()
 
@@ -178,13 +181,14 @@ class FileUpload
             @_uploadQueue.push(part)
             @_doUpload()
             @workerPool.release(worker)
+            checksumsDone += 1
 
             # Notify listeners
             data =
-              partsTotal: @_parts.length
-              partsDone: @_parts.length - @_checksumQueue.length
+              partsTotal: totalChecksums
+              partsDone: checksumsDone
 
-            if @_checksumQueue.length == 0
+            if totalChecksums == checksumsDone
               @_checksumProgress.resolve(data)
             else
               @_checksumProgress.notify(data)
