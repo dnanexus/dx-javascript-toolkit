@@ -1,6 +1,6 @@
 {
   "name": "dx-membrane-toolkit",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "devDependencies": {
     "coffee-script": "~1.7.1",
     "grunt": "~0.4.5",

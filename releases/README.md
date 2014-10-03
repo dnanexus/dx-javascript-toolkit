@@ -1,5 +1,11 @@
 # DNAnexus.js Changelog #
 
+## v0.0.3 (2014/10/03) ##
+ Minor fixes and enhancements. Backward compatible with 0.0.2
+
+ - Fixed a bug that prevented uploading 0 byte files
+ - Using a ResourcePool to manage file creation, making uploading of a large number of files more efficient
+
 ## v0.0.2 (2014/09/30) ##
  Several bug fixes, optimizations, and a couple new features. Backward compatible with 0.0.1.
 
