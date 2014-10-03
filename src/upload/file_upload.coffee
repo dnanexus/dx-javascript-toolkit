@@ -78,6 +78,7 @@ class FileUpload
   # options:
   #   # Required
   #   file: The file to upload
+  #   fileCreationPool: A ResourcePool for creating the files
   #   workerPool: A ResourcePool of web workers for MD5 computation
   #   uploadPool: A ResourcePool of upload tokens, for managing upload concurrency
   #   api: The API bindings to make API calls
@@ -94,7 +95,7 @@ class FileUpload
       folder: "/"
     }, options)
 
-    for key in ["folder", "partSize", "workerPool", "uploadPool", "api", "projectID"]
+    for key in ["folder", "partSize", "fileCreationPool", "workerPool", "uploadPool", "api", "projectID"]
       if !options[key]?
         throw new Error("Required parameter #{key} is not specified")
       this[key] = options[key]
@@ -135,27 +136,35 @@ class FileUpload
       tags: options.tags
       properties: options.properties
 
-    @fileCreationStatus = FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, fileCreationOptions)
-    @fileCreationStatus.done((data) =>
-      existingParts = data.parts ? {}
-      @fileID = data.fileID
+    @fileCreationStatus = $.Deferred()
 
-      for i in [0...@numParts]
-        start = @partSize * i
-        part =
-          index: i + 1
-          start: start
-          stop: Math.min(@file.size, start + @partSize)
+    @fileCreationPool.acquire().done((createFileToken) =>
+      FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, fileCreationOptions).done((data) =>
+        existingParts = data.parts ? {}
+        @fileID = data.fileID
 
-        @_parts.push(part)
+        for i in [0...@numParts]
+          start = @partSize * i
+          part =
+            index: i + 1
+            start: start
+            stop: Math.min(@file.size, start + @partSize)
 
-        if existingParts[i+1]?.state == "complete"
-          @_uploadsDone += 1
-          @_bytesResumed += part.stop - part.start
-        else
-          @_checksumQueue.push(part)
+          @_parts.push(part)
 
-      @_onUploadProgress()
+          if existingParts[i+1]?.state == "complete"
+            @_uploadsDone += 1
+            @_bytesResumed += part.stop - part.start
+          else
+            @_checksumQueue.push(part)
+
+        @_onUploadProgress()
+        @fileCreationStatus.resolve(@fileID)
+      ).fail((error) =>
+        @fileCreationStatus.reject(error)
+      ).always(() =>
+        @fileCreationPool.release(createFileToken)
+      )
     )
 
   _computeChecksums: () ->
@@ -337,8 +346,10 @@ class FileUpload
     @_doUpload()
 
   start: () ->
-    @_computeChecksums()
-    @_doUpload()
+    @fileCreationStatus.done(() =>
+      @_computeChecksums()
+      @_doUpload()
+    )
 
   ###
     Reads length bytes from the file, starting at offset. This is useful for clients who wish

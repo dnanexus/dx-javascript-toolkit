@@ -50,6 +50,7 @@ class Upload
 
     uploadResources = ("UploadToken #{i}" for i in [0...@uploadConcurrency])
     @uploadPool = new ResourcePool(uploadResources)
+    @fileCreationPool = new ResourcePool("FileCreateToken #{i}" for i in [0...@uploadConcurrency])
 
   ###
     Begins the upload. Returns a deferred object which is resolved with an array of FileUpload objects. Rejects the deferred with an
@@ -63,6 +64,7 @@ class Upload
       partSize: @partSize
       workerPool: @workerPool
       uploadPool: @uploadPool
+      fileCreationPool: @fileCreationPool
       api: @api
       projectID: @projectID
       folder: @folder
@@ -79,14 +81,12 @@ class Upload
 
     startUpload = (index) =>
       upload = @uploads[index]
-      upload.fileCreationStatus.done(() =>
-        upload.start()
+      upload.start()
 
-        if index == @uploads.length - 1
-          status.resolve(@uploads)
-        else
-          startUpload(index + 1)
-      )
+      if index == @uploads.length - 1
+        status.resolve(@uploads)
+      else
+        startUpload(index + 1)
 
     # Start the uploads in file order
     startUpload(0)
@@ -100,6 +100,7 @@ class Upload
     that were deleted.
   ###
   abort: () ->
+    @fileCreationPool.close()
     @workerPool.close()
     @uploadPool.close()
 
