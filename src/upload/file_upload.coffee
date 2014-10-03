@@ -247,7 +247,7 @@ class FileUpload
 
   _doUpload: () ->
     # If we're all done, close the file
-    if @_bytesUploaded + @_bytesResumed == @file.size
+    if @_uploadsDone == @numParts && @_bytesUploaded + @_bytesResumed == @file.size
       @_closeFile()
       return
 
