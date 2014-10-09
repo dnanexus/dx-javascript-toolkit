@@ -26,6 +26,7 @@ class Api
   # Construct a new API binding
   #
   #  authToken: The authentication token with which we can access the DNAnexus API.
+  #
   # options:
   #   apiServer: Override the API server information. Default: "api.dnanexus.com"
   #   maxAJAXTrials: The number of times to retry an AJAX request. Default: 5
@@ -52,14 +53,16 @@ class Api
   #   dataType: Passed straight through to jquery ajax if using jquery, else ignored
   #   skipConversion: If true, object data will not be converted to JSON
   #   withCredentials: A boolean indicating whether or not the with credentials xhrFlag should be set. Default is false
+  #   maxRetries: The maximum number of times to retry the request if it fails due to a network error. Default is 5.
   #
   # Returns a deferred object with has an abort method added
   #
-  _ajaxRequest: (url, options = {}, trial = 0) ->
+  @_ajaxRequest: (url, options = {}, trial = 0) ->
     status = $.Deferred()
     headers = options.headers ? {}
     data = options.data
     method = options.method ? "POST"
+    maxRetries = options.maxRetries ? 5
 
     request = null
 
@@ -94,7 +97,7 @@ class Api
             # TODO: Notify the client that the API server is down temporarily
 
           else if textStatus == "error" && jqXHR.status == 0
-            if trial > @maxAJAXTrials
+            if trial > maxRetries
               rejectStatus({ type: "AjaxError", details: {jqXHR: jqXHR}})
             else
               # Backoff/Retry
@@ -184,11 +187,12 @@ class Api
     input =
       headers: headers
       data: input
+      maxRetries: @maxAJAXTrials
 
     if options.withCredentials == true
       input.withCredentials = true
 
-    ajaxRequest = @._ajaxRequest(url, input)
+    ajaxRequest = Api._ajaxRequest(url, input)
 
     # Decorate the deferred object with an abort method which cancels the ajax request and sets the internal
     # state of the deferred object to aborted, which prevents the deferred object from being resolved
@@ -290,6 +294,5 @@ class Api
       originalCall.abort()
 
     return deferred
-
 
 module.exports = Api
