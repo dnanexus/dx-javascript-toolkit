@@ -1,4 +1,6 @@
 # TODO: Set cookies to expire when the token expires
+ajaxRequest = require('./ajax_request.coffee')
+
 class Api
   #
   # Globals
@@ -40,112 +42,6 @@ class Api
     # A list of pending API calls, do be tracked/aborted when needed
     @pendingApiCallKey = 0
     @pendingApiCalls = {}
-
-  #
-  # CORS request factory
-  #
-  # Options: A hash with the following properties
-  #   method: HTTP Method - default "POST"
-  #   data: The data to send to the server. If an object, will be converted to JSON and the content-type will
-  #         be defaulted to application/json. Anything else will be send literally.
-  #   headers: An object containing header key/value pairs
-  #   cache: A boolean which will turn of jquery caching if using jquery, else ignored
-  #   dataType: Passed straight through to jquery ajax if using jquery, else ignored
-  #   skipConversion: If true, object data will not be converted to JSON
-  #   withCredentials: A boolean indicating whether or not the with credentials xhrFlag should be set. Default is false
-  #   maxRetries: The maximum number of times to retry the request if it fails due to a network error. Default is 5.
-  #
-  # Returns a deferred object with has an abort method added
-  #
-  @_ajaxRequest: (url, options = {}, trial = 0) ->
-    status = $.Deferred()
-    headers = options.headers ? {}
-    data = options.data
-    method = options.method ? "POST"
-    maxRetries = options.maxRetries ? 5
-
-    request = null
-
-    successStatusCodes = [200, 202, 206]
-
-    if data? && typeof data == "object" && options.skipConversion != true
-      headers["Content-Type"] = "application/json"
-      data = JSON.stringify(data)
-
-    resolveStatus = (data) =>
-      status.resolve(data)
-
-    rejectStatus = (error) =>
-      status.reject(error)
-
-    try
-      ajaxOptions =
-        url: url
-        headers: headers
-        type: method
-        data: data
-
-        success: (data) ->
-          resolveStatus(data)
-
-        error: (jqXHR, textStatus, errorThrown) =>
-          # Service unavailable, retry later
-          if jqXHR.status == 503
-            retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10)
-            retryDelay = 60 unless typeof retryDelay == "number" && !isNaN(retryDelay)
-
-            # TODO: Notify the client that the API server is down temporarily
-
-          else if textStatus == "error" && jqXHR.status == 0
-            if trial > maxRetries
-              rejectStatus({ type: "AjaxError", details: {jqXHR: jqXHR}})
-            else
-              # Backoff/Retry
-              trial += 1
-              setTimeout(
-                () => @_ajaxRequest(url, options, trial).then(status.resolve, status.reject, status.notify),
-                1000 * Math.pow(2, trial)
-              )
-          else
-            # Skip aborts
-            return if errorThrown == "abort" || textStatus == "abort" || status.aborted
-
-            error = null
-
-            # If the request timed out or didn't parse
-            if textStatus == "timeout"
-              error = { type: "AjaxTimeout", details: {url: url} }
-            else if textStatus == "parsererror"
-              error = { type: "AjaxError", details: {data: JSON.stringify(input)} }
-            else
-              try
-                error = JSON.parse(jqXHR.responseText).error ? {type: "InvalidErrorResponse"}
-              catch e
-                error = { type: "InvalidErrorResponse", details: e }
-
-            rejectStatus(error)
-
-      if options.cache?
-        ajaxOptions.cache = options.cache
-
-      if options.withCredentials == true
-        ajaxOptions.xhrFields =
-          withCredentials: true
-
-      if options.dataType?
-        ajaxOptions.dataType = options.cache
-
-      request = $.ajax(ajaxOptions)
-
-      status.abort = () ->
-        request.abort()
-
-    catch e
-      console.log("Unknown error during API call", e)
-      request.abort() if request? && request.abort?
-      rejectStatus({type: "UnknownError", details: e})
-
-    return status
 
   #
   # Performs an API call against Nucleus.
@@ -192,15 +88,15 @@ class Api
     if options.withCredentials == true
       input.withCredentials = true
 
-    ajaxRequest = Api._ajaxRequest(url, input)
+    request = ajaxRequest(url, input)
 
     # Decorate the deferred object with an abort method which cancels the ajax request and sets the internal
     # state of the deferred object to aborted, which prevents the deferred object from being resolved
     status.abort = () ->
       @aborted = true
-      ajaxRequest.abort()
+      request.abort()
 
-    ajaxRequest.done((data) =>
+    request.done((data) =>
       return if status.aborted
 
       # Firefox insists that the returned data is a string, not a JSON object. Here we parse the
