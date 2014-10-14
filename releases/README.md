@@ -1,7 +1,12 @@
 # DNAnexus.js Changelog #
 
+All releases are backward compatible unless noted otherwise.
+
+## v0.0.4 (2014/10/14) ##
+ Extracting ajaxRequest into a top level resource.
+
 ## v0.0.3 (2014/10/03) ##
- Minor fixes and enhancements. Backward compatible with 0.0.2
+ Minor fixes and enhancements.
 
  - Fixed a bug that prevented uploading 0 byte files
  - Using a ResourcePool to manage file creation, making uploading of a large number of files more efficient
