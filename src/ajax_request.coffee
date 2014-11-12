@@ -105,7 +105,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
         withCredentials: true
 
     if options.dataType?
-      ajaxOptions.dataType = options.cache
+      ajaxOptions.dataType = options.dataType
 
     request = $.ajax(ajaxOptions)
 
