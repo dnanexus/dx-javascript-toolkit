@@ -55,12 +55,6 @@ class FileUpload
       @createFile(file, api, partSize, projectID, options)
 
     onSearchSuccess = (data) ->
-      return data
-
-    onSearchFailure = () ->
-      return null
-
-    onSearchSuccess = (data) ->
       if data.results.length == 1
         return {
           fileID: data.results[0].id
