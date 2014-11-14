@@ -14,6 +14,7 @@ uploadOptions =
   projectID: "project-1234"
   workerPool: new ResourcePool([])
   uploadPool: new ResourcePool([])
+  fileCreationPool: new ResourcePool([])
   api: new Api("ABC123")
 
 describe("FileUpload", ->
