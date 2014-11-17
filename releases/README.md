@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.5 (2014/11/17) ##
+ Implementing readBytes, and preventing upload of folders.
+
 ## v0.0.4 (2014/10/14) ##
  Extracting ajaxRequest into a top level resource.
 
