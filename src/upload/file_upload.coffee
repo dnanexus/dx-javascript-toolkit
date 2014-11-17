@@ -1,6 +1,8 @@
 # AWS Constraint
 MAX_PARTS = 10000
 
+MB = Math.pow(1024, 2)
+
 class FileUpload
   # A signature is in the form
   # <File size bytes> <Modified timestamp ms> <Value 0 or 1 indicating to compress> <chunk_size in bytes>
@@ -71,7 +73,7 @@ class FileUpload
   ###
   # options:
   #   # Required
-  #   file: The file to upload
+  #   file: The file to upload. Must be a logical file, not a directory.
   #   fileCreationPool: A ResourcePool for creating the files
   #   workerPool: A ResourcePool of web workers for MD5 computation
   #   uploadPool: A ResourcePool of upload tokens, for managing upload concurrency
@@ -81,8 +83,8 @@ class FileUpload
   #   # Optional
   #   folder: The folder to upload the file into. Default: "/"
   #   partSize: The size of each part, in bytes. Default: 10485760
-  #   tags: An array of strings that will be added as tags on all of the uploaded files
-  #   properties: An object literal which will populate the properties of all uploaded files.
+  #   tags: An array of strings that will be added as tags on the uploaded file
+  #   properties: An object literal which will populate the properties of this uploaded file
   ###
   constructor: (@file, options = {}) ->
     options = $.extend({
@@ -124,6 +126,8 @@ class FileUpload
     # Maps part index to the amount of data upload for that part
     @_partUploadProgress = []
 
+    @isDirectory = false
+
     # Find the file to resume, or create a new file
     fileCreationOptions =
       folder: @folder
@@ -132,34 +136,50 @@ class FileUpload
 
     @fileCreationStatus = $.Deferred()
 
-    @fileCreationPool.acquire().done((createFileToken) =>
-      FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, fileCreationOptions).done((data) =>
-        existingParts = data.parts ? {}
-        @fileID = data.fileID
+    getServerFile = () =>
+      @fileCreationPool.acquire().done((createFileToken) =>
+        FileUpload::findOrCreateFile(file, @api, @partSize, @projectID, fileCreationOptions).done((data) =>
+          existingParts = data.parts ? {}
+          @fileID = data.fileID
 
-        for i in [0...@numParts]
-          start = @partSize * i
-          part =
-            index: i + 1
-            start: start
-            stop: Math.min(@file.size, start + @partSize)
+          for i in [0...@numParts]
+            start = @partSize * i
+            part =
+              index: i + 1
+              start: start
+              stop: Math.min(@file.size, start + @partSize)
 
-          @_parts.push(part)
+            @_parts.push(part)
 
-          if existingParts[i+1]?.state == "complete"
-            @_uploadsDone += 1
-            @_bytesResumed += part.stop - part.start
-          else
-            @_checksumQueue.push(part)
+            if existingParts[i+1]?.state == "complete"
+              @_uploadsDone += 1
+              @_bytesResumed += part.stop - part.start
+            else
+              @_checksumQueue.push(part)
 
-        @_onUploadProgress()
-        @fileCreationStatus.resolve(@fileID)
-      ).fail((error) =>
-        @fileCreationStatus.reject(error)
-      ).always(() =>
-        @fileCreationPool.release(createFileToken)
+          @_onUploadProgress()
+          @fileCreationStatus.resolve(@fileID)
+        ).fail((error) =>
+          @fileCreationStatus.reject(error)
+        ).always(() =>
+          @fileCreationPool.release(createFileToken)
+        )
       )
-    )
+
+    # We can't yet handle uploading directories. Test, and if someone tries then remove it from the list and continue.
+    # If the file is large, it's pretty safe to say it's not a directory
+    if @file.size < 1*MB
+      # Try reading a few bytes; directories will fail a readAsArrayBuffer call
+      @readBytes(0, 10).done(getServerFile).fail(() =>
+        @isDirectory = true
+        errorObject = {error: {type: "InvalidType", message: "File is a directory and cannot be uploaded"}}
+        @fileCreationStatus.reject(errorObject)
+        @_uploadProgress.reject(errorObject)
+        @_checksumProgress.reject(errorObject)
+        @_closingProgress.reject(errorObject)
+      )
+    else
+      getServerFile()
 
   _computeChecksums: () ->
     totalChecksums = @_checksumQueue.length
@@ -326,9 +346,11 @@ class FileUpload
       apiCall.abort()
     @_uploadsCalls = {}
 
-    @api.call(@projectID, "removeObjects", {objects: [@fileID]}).then(() =>
-      @_uploadProgress.reject()
-      return @fileID
+    @fileCreationStatus.done(() =>
+      @api.call(@projectID, "removeObjects", {objects: [@fileID]}).then(() =>
+        @_uploadProgress.reject()
+        return @fileID
+      )
     )
 
   pause: () ->
@@ -349,15 +371,26 @@ class FileUpload
     Reads length bytes from the file, starting at offset. This is useful for clients who wish
     to perform some validation based on a small part of the file, typically the header.
 
-    file: An HTML5 File object
     offset: The byte offset into the file, 0 based
     length: The number of bytes to read from the file, starting at offset.
 
     Returns a deferred object which will be resolved with an ArrayBuffer. Note, if offset is outside the file, the returned ArrayBuffer
-    will be empty. Also if offset + length is greater than the file size, the returned ArrayBuffer will have a byteLength less than the 
-    requested length
+    will be empty. Also if offset + length is greater than the file size, the returned ArrayBuffer will have a byteLength less than the
+    requested length.
   ###
-  readBytes: (offset, length) ->
-    alert("readBytes not yet supported")
+  readBytes: (offset = 0, length = Infinity) ->
+    if offset < 0
+      offset = Math.max(0, @file.size + offset)
+    if length < 0
+      length = 0
+    status = $.Deferred()
+    slicer = @file.slice ? @file.webkitSlice ? @file.mozSlice
+    if !slicer? then return status.reject("No slice function found for #{@file.name}")
+    slice = slicer.call(@file, Math.min(@file.size, offset), Math.min(@file.size, offset + length))
+    reader = new FileReader()
+    reader.onload = () -> status.resolve(reader.result)
+    reader.onerror = () -> status.reject(reader.error)
+    reader.readAsArrayBuffer(slice)
+    return status
 
 module.exports = FileUpload

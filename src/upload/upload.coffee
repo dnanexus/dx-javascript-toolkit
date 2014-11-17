@@ -88,7 +88,7 @@ class Upload
       else
         startUpload(index + 1)
 
-    # Start the uploads in file order
+    # Start the uploads in file order after checking they can be uploaded
     startUpload(0)
 
     # TODO: HANDLE FAILURES
