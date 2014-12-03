@@ -44,7 +44,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
     else
       status.reject(error)
 
-    status.reject({ type: "AjaxError", details: {jqXHR: error.details?.jqXHR ? {}}})
+    status.reject({type: "AjaxError", details: {jqXHR: error.details?.jqXHR ? {}}})
 
   try
     ajaxOptions =
@@ -61,7 +61,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
         # Service unavailable, retry later
         if jqXHR.status == 503
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10)
-          retryDelay = 60 unless toString.call(retryDelay) == "[object Number]" && !isNaN(retryDelay) && retryDelay > 0
+          retryDelay = 60 unless retryDelay? && isFinite(retryDelay) && retryDelay > 0
 
           rejectStatus({type: "AjaxRetryTimeout", details: {delay: retryDelay}})
 
