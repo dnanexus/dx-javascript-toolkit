@@ -28,7 +28,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
 
   successStatusCodes = [200, 202, 206]
 
-  if data? && _.isObject(data) && options.skipConversion != true
+  if data? && typeof data == "object" && options.skipConversion != true
     headers["Content-Type"] = "application/json"
     data = JSON.stringify(data)
 
@@ -61,7 +61,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
         # Service unavailable, retry later
         if jqXHR.status == 503
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10)
-          retryDelay = 60 unless _.isNumber(retryDelay) && !_.isNaN(retryDelay)
+          retryDelay = 60 unless toString.call(retryDelay) == "[object Number]" && !isNaN(retryDelay) && retryDelay > 0
 
           rejectStatus({type: "AjaxRetryTimeout", details: {delay: retryDelay}})
 

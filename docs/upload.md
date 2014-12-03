@@ -20,7 +20,6 @@ Dependencies
 ------------
 
 * [jQuery](http://jquery.com/) - Any relatively recent version will do. Required features are `$.ajax` and `$.Deferred`
-* [Underscore.js](http://underscorejs.org)
 * [Operative.js](https://github.com/padolsey/operative) - Required for web worker support, which enabled efficient checksum computation
 The API library requires a modern very of jQuery, which must be loaded before attempting to use the DNAnexus API library.
 * [SparkMD5](https://github.com/satazor/SparkMD5) - Library for comptuing MD5 checksums

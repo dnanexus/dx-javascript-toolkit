@@ -17,7 +17,6 @@ Dependencies
 ------------
 
 * [jQuery](http://jquery.com/) - Any relatively recent version will do. Required features are `$.ajax` and `$.Deferred`
-* [Underscore.js](http://underscorejs.org)
 
 DX.Api Documentation
 --------------------
