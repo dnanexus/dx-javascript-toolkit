@@ -268,11 +268,16 @@ class FileUpload
     else
       @_uploadProgress.notify(progressData)
 
-  _doUpload: () ->
-    # If we're all done, close the file
+  # Checks to see if the file should be closed and closes it; returns true if close was called, false otherwise
+  _closeIfDone: () ->
     if @_uploadsDone == @numParts && @_bytesUploaded + @_bytesResumed == @file.size
       @_closeFile()
-      return
+      return true
+    return false
+
+  _doUpload: () ->
+    # If we're all done, close the file
+    return if @_closeIfDone()
 
     if @_uploadQueue.length > 0
       @uploadPool.acquire().done((token) =>
@@ -301,7 +306,7 @@ class FileUpload
             @uploadPool.release(token)
             token = null
 
-          @_doUpload()
+          @_closeIfDone()
 
         abortPart = () =>
           @_uploadQueue.unshift(part)
@@ -374,8 +379,9 @@ class FileUpload
     offset: The byte offset into the file, 0 based
     length: The number of bytes to read from the file, starting at offset.
 
-    Returns a deferred object which will be resolved with an ArrayBuffer. Note, if offset is outside the file, the returned ArrayBuffer
-    will be empty. Also if offset + length is greater than the file size, the returned ArrayBuffer will have a byteLength less than the
+    Returns a Deferred object which will be resolved with an ArrayBuffer. Note: if offset is
+    outside the file, the returned ArrayBuffer will be empty. Also if offset + length is
+    greater than the file size, the returned ArrayBuffer will have a byteLength less than the
     requested length.
   ###
   readBytes: (offset = 0, length = Infinity) ->
