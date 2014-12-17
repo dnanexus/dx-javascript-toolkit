@@ -126,6 +126,9 @@ class FileUpload
     # Maps part index to the amount of data upload for that part
     @_partUploadProgress = []
 
+    @_uploadPoolClientID = @uploadPool.acquireClientID("file_upload_")
+    @_workerPoolClientID = @workerPool.acquireClientID("file_worker_")
+
     @isDirectory = false
 
     # Find the file to resume, or create a new file
@@ -190,7 +193,7 @@ class FileUpload
 
       # Begin computing MD5s
       do (part) =>
-        @workerPool.acquire().done((worker) =>
+        @workerPool.acquire(@_workerPoolClientID).done((worker) =>
           if @_aborted
             @workerPool.release(worker)
             return
@@ -272,6 +275,8 @@ class FileUpload
   _closeIfDone: () ->
     if @_uploadsDone == @numParts && @_bytesUploaded + @_bytesResumed == @file.size
       @_closeFile()
+      @uploadPool.releaseClientID(@_uploadPoolClientID)
+      @workerPool.releaseClientID(@_workerPoolClientID)
       return true
     return false
 
@@ -280,8 +285,9 @@ class FileUpload
     return if @_closeIfDone()
 
     if @_uploadQueue.length > 0
-      @uploadPool.acquire().done((token) =>
+      @uploadPool.acquire(@_uploadPoolClientID).done((token) =>
         if @_uploadQueue.length == 0 || @_aborted
+          console.debug("Releasing #{token}", (new Error()).stack.split("\n").length)
           @uploadPool.release(token)
           return
 
@@ -345,6 +351,9 @@ class FileUpload
     return $.Deferred().resolve(@fileID) if @_aborted
     return $.Deferred().reject({reason: "File Closed"}) if @_closed
     @_aborted = true
+
+    @uploadPool.releaseClientID(@_uploadPoolClientID)
+    @workerPool.releaseClientID(@_workerPoolClientID)
 
     @_uploadQueue = []
     for index, apiCall of @_uploadCalls

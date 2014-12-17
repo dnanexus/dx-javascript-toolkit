@@ -104,6 +104,10 @@ class Upload
     @workerPool.close()
     @uploadPool.close()
 
+    @fileCreationPool.clear()
+    @workerPool.clear()
+    @uploadPool.clear()
+
     status = $.Deferred()
     count = 0
     aborted = []
@@ -130,6 +134,9 @@ class Upload
 
     @workerPool.close()
     @uploadPool.close()
+
+    @workerPool.clear()
+    @uploadPool.clear()
 
   ###
     Pauses all uploads. No new checksums will be computed, no new upload parts will begin, and all parts currently being uploaded will
