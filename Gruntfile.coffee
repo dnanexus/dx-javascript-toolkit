@@ -8,6 +8,12 @@ module.exports = (grunt) ->
           'target/dnanexus.js': ['src/dnanexus.coffee']
           'target/dnanexus-upload.js': ['src/dnanexus_upload.coffee']
 
+    uglify:
+      dist:
+        files:
+          'target/dnanexus.min.js': ['target/dnanexus.js']
+          'target/dnanexus-upload.min.js': ['target/dnanexus-upload.js']
+
     copy:
       getting_started:
         cwd: "releases/latest/"
@@ -37,7 +43,8 @@ module.exports = (grunt) ->
   })
 
   grunt.loadNpmTasks('grunt-browserify')
+  grunt.loadNpmTasks('grunt-contrib-uglify')
   grunt.loadNpmTasks('grunt-contrib-copy')
   grunt.loadNpmTasks('grunt-contrib-watch')
 
-  grunt.registerTask('default', ['browserify', 'copy'])
+  grunt.registerTask('default', ['browserify', 'uglify', 'copy'])
