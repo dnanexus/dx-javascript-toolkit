@@ -59,7 +59,7 @@ ajaxRequest = function(url, options, trial) {
         var e, error, retryDelay, _ref3;
         if (jqXHR.status === 503) {
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10);
-          if (!(toString.call(retryDelay) === "[object Number]" && !isNaN(retryDelay) && retryDelay > 0)) {
+          if (!((retryDelay != null) && isFinite(retryDelay) && retryDelay > 0)) {
             retryDelay = 60;
           }
           rejectStatus({

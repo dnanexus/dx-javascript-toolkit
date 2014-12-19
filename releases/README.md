@@ -2,6 +2,11 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.7 (2014/12/18) ##
+- Addressing an issue where canceling large uploads in Firefox would exhaust the call stack.
+- Fixing examples so that the script included in each example directory matches the script reference in code
+- Adding minified versions of the libraries with the distribution
+
 ## v0.0.6 (2014/12/03) ##
 Removing reference to functions provided by Underscore.js; Underscore is no longer a dependency.
 

@@ -287,7 +287,6 @@ class FileUpload
     if @_uploadQueue.length > 0
       @uploadPool.acquire(@_uploadPoolClientID).done((token) =>
         if @_uploadQueue.length == 0 || @_aborted
-          console.debug("Releasing #{token}", (new Error()).stack.split("\n").length)
           @uploadPool.release(token)
           return
 

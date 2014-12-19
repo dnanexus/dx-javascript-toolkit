@@ -59,7 +59,7 @@ ajaxRequest = function(url, options, trial) {
         var e, error, retryDelay, _ref3;
         if (jqXHR.status === 503) {
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10);
-          if (!(toString.call(retryDelay) === "[object Number]" && !isNaN(retryDelay) && retryDelay > 0)) {
+          if (!((retryDelay != null) && isFinite(retryDelay) && retryDelay > 0)) {
             retryDelay = 60;
           }
           rejectStatus({
@@ -372,19 +372,48 @@ var ResourcePool;
 ResourcePool = (function() {
   function ResourcePool(_resources) {
     this._resources = _resources;
+    this.CLIENT_ID_LENGTH = 9;
     this._queue = [];
     this._closed = false;
+    this._clientRequests = {};
   }
 
-  ResourcePool.prototype.acquire = function() {
-    var resolver;
-    resolver = $.Deferred();
-    if (this._resources.length > 0 && !this._closed) {
-      resolver.resolve(this._resources.shift());
-    } else {
-      this._queue.push(resolver);
+  ResourcePool.prototype.acquireClientID = function(prefix) {
+    var id;
+    if (prefix == null) {
+      prefix = "";
     }
-    return resolver;
+    id = null;
+    while ((id == null) || (this._clientRequests[id] != null)) {
+      id = prefix + Math.round(Math.random() * Math.pow(10, this.CLIENT_ID_LENGTH));
+    }
+    this._clientRequests[id] = [];
+    return id;
+  };
+
+  ResourcePool.prototype.releaseClientID = function(clientID) {
+    var request, _i, _len, _ref, _ref1;
+    _ref1 = (_ref = this._clientRequests[clientID]) != null ? _ref : [];
+    for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+      request = _ref1[_i];
+      request.reject();
+    }
+    return delete this._clientRequests[clientID];
+  };
+
+  ResourcePool.prototype.acquire = function(clientID) {
+    var request, resource;
+    request = $.Deferred();
+    if (this._resources.length > 0 && !this._closed) {
+      resource = this._resources.shift();
+      request.resolve(resource);
+    } else {
+      this._queue.push(request);
+      if ((clientID != null) && (this._clientRequests[clientID] != null)) {
+        this._clientRequests[clientID].push(request);
+      }
+    }
+    return request;
   };
 
   ResourcePool.prototype.close = function() {
@@ -399,9 +428,16 @@ ResourcePool = (function() {
     }
   };
 
-  ResourcePool.prototype.release = function(resource) {
-    if (this._queue.length > 0 && !this._closed) {
-      return this._queue.shift().resolve(resource);
+  ResourcePool.prototype.release = function(resource, clientID) {
+    var request;
+    request = null;
+    if (!this._closed) {
+      while (this._queue.length > 0 && ((request == null) || request.state() !== "pending")) {
+        request = this._queue.shift();
+      }
+    }
+    if (request != null) {
+      return request.resolve(resource);
     } else {
       return this._resources.push(resource);
     }
@@ -420,6 +456,11 @@ ResourcePool = (function() {
       _results.push(this.release(resource));
     }
     return _results;
+  };
+
+  ResourcePool.prototype.clear = function() {
+    this._clientRequests = {};
+    return this._queue = [];
   };
 
   return ResourcePool;
@@ -571,6 +612,8 @@ FileUpload = (function() {
     this._uploadQueue = [];
     this._parts = [];
     this._partUploadProgress = [];
+    this._uploadPoolClientID = this.uploadPool.acquireClientID("file_upload_");
+    this._workerPoolClientID = this.workerPool.acquireClientID("file_worker_");
     this.isDirectory = false;
     fileCreationOptions = {
       folder: this.folder,
@@ -641,7 +684,7 @@ FileUpload = (function() {
       part = this._checksumQueue.shift();
       _results.push((function(_this) {
         return function(part) {
-          return _this.workerPool.acquire().done(function(worker) {
+          return _this.workerPool.acquire(_this._workerPoolClientID).done(function(worker) {
             var slice, slicer, _ref, _ref1;
             if (_this._aborted) {
               _this.workerPool.release(worker);
@@ -737,13 +780,22 @@ FileUpload = (function() {
     }
   };
 
-  FileUpload.prototype._doUpload = function() {
+  FileUpload.prototype._closeIfDone = function() {
     if (this._uploadsDone === this.numParts && this._bytesUploaded + this._bytesResumed === this.file.size) {
       this._closeFile();
+      this.uploadPool.releaseClientID(this._uploadPoolClientID);
+      this.workerPool.releaseClientID(this._workerPoolClientID);
+      return true;
+    }
+    return false;
+  };
+
+  FileUpload.prototype._doUpload = function() {
+    if (this._closeIfDone()) {
       return;
     }
     if (this._uploadQueue.length > 0) {
-      return this.uploadPool.acquire().done((function(_this) {
+      return this.uploadPool.acquire(this._uploadPoolClientID).done((function(_this) {
         return function(token) {
           var abortPart, call, onUploadDone, origAbort, part;
           if (_this._uploadQueue.length === 0 || _this._aborted) {
@@ -764,7 +816,7 @@ FileUpload = (function() {
               _this.uploadPool.release(token);
               token = null;
             }
-            return _this._doUpload();
+            return _this._closeIfDone();
           };
           abortPart = function() {
             _this._uploadQueue.unshift(part);
@@ -812,6 +864,8 @@ FileUpload = (function() {
       });
     }
     this._aborted = true;
+    this.uploadPool.releaseClientID(this._uploadPoolClientID);
+    this.workerPool.releaseClientID(this._workerPoolClientID);
     this._uploadQueue = [];
     _ref = this._uploadCalls;
     for (index in _ref) {
@@ -864,8 +918,9 @@ FileUpload = (function() {
     offset: The byte offset into the file, 0 based
     length: The number of bytes to read from the file, starting at offset.
   
-    Returns a deferred object which will be resolved with an ArrayBuffer. Note, if offset is outside the file, the returned ArrayBuffer
-    will be empty. Also if offset + length is greater than the file size, the returned ArrayBuffer will have a byteLength less than the
+    Returns a Deferred object which will be resolved with an ArrayBuffer. Note: if offset is
+    outside the file, the returned ArrayBuffer will be empty. Also if offset + length is
+    greater than the file size, the returned ArrayBuffer will have a byteLength less than the
     requested length.
    */
 
@@ -1116,6 +1171,9 @@ Upload = (function() {
     this.fileCreationPool.close();
     this.workerPool.close();
     this.uploadPool.close();
+    this.fileCreationPool.clear();
+    this.workerPool.clear();
+    this.uploadPool.clear();
     status = $.Deferred();
     count = 0;
     aborted = [];
@@ -1152,7 +1210,9 @@ Upload = (function() {
       worker.terminate();
     }
     this.workerPool.close();
-    return this.uploadPool.close();
+    this.uploadPool.close();
+    this.workerPool.clear();
+    return this.uploadPool.clear();
   };
 
 

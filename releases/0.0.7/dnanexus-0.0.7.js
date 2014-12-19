@@ -1,6 +1,164 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var Api,
+var ajaxRequest;
+
+ajaxRequest = function(url, options, trial) {
+  var ajaxDelay, ajaxOptions, data, e, headers, maxRetries, method, rejectStatus, request, resolveStatus, status, successStatusCodes, _ref, _ref1, _ref2;
+  if (options == null) {
+    options = {};
+  }
+  if (trial == null) {
+    trial = 0;
+  }
+  status = $.Deferred();
+  headers = (_ref = options.headers) != null ? _ref : {};
+  data = options.data;
+  method = (_ref1 = options.method) != null ? _ref1 : "POST";
+  ajaxDelay = options.ajaxDelay;
+  maxRetries = (_ref2 = options.maxRetries) != null ? _ref2 : 5;
+  request = null;
+  successStatusCodes = [200, 202, 206];
+  if ((data != null) && typeof data === "object" && options.skipConversion !== true) {
+    headers["Content-Type"] = "application/json";
+    data = JSON.stringify(data);
+  }
+  resolveStatus = function(data) {
+    if (ajaxDelay != null) {
+      return setTimeout((function() {
+        return status.resolve(data);
+      }), ajaxDelay);
+    } else {
+      return status.resolve(data);
+    }
+  };
+  rejectStatus = function(error) {
+    var _ref3, _ref4;
+    if (ajaxDelay != null) {
+      setTimeout((function() {
+        return status.reject(error);
+      }), ajaxDelay);
+    } else {
+      status.reject(error);
+    }
+    return status.reject({
+      type: "AjaxError",
+      details: {
+        jqXHR: (_ref3 = (_ref4 = error.details) != null ? _ref4.jqXHR : void 0) != null ? _ref3 : {}
+      }
+    });
+  };
+  try {
+    ajaxOptions = {
+      url: url,
+      headers: headers,
+      type: method,
+      data: data,
+      success: function(data) {
+        return resolveStatus(data);
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        var e, error, retryDelay, _ref3;
+        if (jqXHR.status === 503) {
+          retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10);
+          if (!((retryDelay != null) && isFinite(retryDelay) && retryDelay > 0)) {
+            retryDelay = 60;
+          }
+          rejectStatus({
+            type: "AjaxRetryTimeout",
+            details: {
+              delay: retryDelay
+            }
+          });
+          return setTimeout(function() {
+            return DX.ajaxRequest(url, options, trial).then(status.resolve, status.reject, status.notify);
+          }, retryDelay * 1000);
+        } else if (textStatus === "error" && jqXHR.status === 0) {
+          if (trial > maxRetries) {
+            return rejectStatus({
+              type: "AjaxError",
+              details: {
+                jqXHR: jqXHR
+              }
+            });
+          } else {
+            trial += 1;
+            return setTimeout(function() {
+              return DX.ajaxRequest(url, options, trial).then(status.resolve, status.reject, status.notify);
+            }, 1000 * Math.pow(2, trial));
+          }
+        } else {
+          if (errorThrown === "abort" || textStatus === "abort" || status.aborted) {
+            return;
+          }
+          error = null;
+          if (textStatus === "timeout") {
+            error = {
+              type: "AjaxTimeout",
+              details: {
+                url: url
+              }
+            };
+          } else if (textStatus === "parsererror") {
+            error = {
+              type: "AjaxError",
+              details: {
+                data: JSON.stringify(input)
+              }
+            };
+          } else {
+            try {
+              error = (_ref3 = JSON.parse(jqXHR.responseText).error) != null ? _ref3 : {
+                type: "InvalidErrorResponse"
+              };
+            } catch (_error) {
+              e = _error;
+              error = {
+                type: "InvalidErrorResponse",
+                details: e
+              };
+            }
+          }
+          return rejectStatus(error);
+        }
+      }
+    };
+    if (options.cache != null) {
+      ajaxOptions.cache = options.cache;
+    }
+    if (options.withCredentials === true) {
+      ajaxOptions.xhrFields = {
+        withCredentials: true
+      };
+    }
+    if (options.dataType != null) {
+      ajaxOptions.dataType = options.dataType;
+    }
+    request = $.ajax(ajaxOptions);
+    status.abort = function() {
+      return request.abort();
+    };
+  } catch (_error) {
+    e = _error;
+    console.log("Unknown error during API call", e);
+    if ((request != null) && (request.abort != null)) {
+      request.abort();
+    }
+    rejectStatus({
+      type: "UnknownError",
+      details: e
+    });
+  }
+  return status;
+};
+
+module.exports = ajaxRequest;
+
+
+
+},{}],2:[function(require,module,exports){
+var Api, ajaxRequest,
   __hasProp = {}.hasOwnProperty;
+
+ajaxRequest = require('./ajax_request.coffee');
 
 Api = (function() {
   Api.prototype.API_ERRORS = {
@@ -36,133 +194,8 @@ Api = (function() {
     this.pendingApiCalls = {};
   }
 
-  Api.prototype._ajaxRequest = function(url, options, trial) {
-    var ajaxOptions, data, e, headers, method, rejectStatus, request, resolveStatus, status, successStatusCodes, _ref, _ref1;
-    if (options == null) {
-      options = {};
-    }
-    if (trial == null) {
-      trial = 0;
-    }
-    status = $.Deferred();
-    headers = (_ref = options.headers) != null ? _ref : {};
-    data = options.data;
-    method = (_ref1 = options.method) != null ? _ref1 : "POST";
-    request = null;
-    successStatusCodes = [200, 202, 206];
-    if ((data != null) && typeof data === "object" && options.skipConversion !== true) {
-      headers["Content-Type"] = "application/json";
-      data = JSON.stringify(data);
-    }
-    resolveStatus = (function(_this) {
-      return function(data) {
-        return status.resolve(data);
-      };
-    })(this);
-    rejectStatus = (function(_this) {
-      return function(error) {
-        return status.reject(error);
-      };
-    })(this);
-    try {
-      ajaxOptions = {
-        url: url,
-        headers: headers,
-        type: method,
-        data: data,
-        success: function(data) {
-          return resolveStatus(data);
-        },
-        error: (function(_this) {
-          return function(jqXHR, textStatus, errorThrown) {
-            var e, error, retryDelay, _ref2;
-            if (jqXHR.status === 503) {
-              retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10);
-              if (!(typeof retryDelay === "number" && !isNaN(retryDelay))) {
-                return retryDelay = 60;
-              }
-            } else if (textStatus === "error" && jqXHR.status === 0) {
-              if (trial > _this.maxAJAXTrials) {
-                return rejectStatus({
-                  type: "AjaxError",
-                  details: {
-                    jqXHR: jqXHR
-                  }
-                });
-              } else {
-                trial += 1;
-                return setTimeout(function() {
-                  return _this._ajaxRequest(url, options, trial).then(status.resolve, status.reject, status.notify);
-                }, 1000 * Math.pow(2, trial));
-              }
-            } else {
-              if (errorThrown === "abort" || textStatus === "abort" || status.aborted) {
-                return;
-              }
-              error = null;
-              if (textStatus === "timeout") {
-                error = {
-                  type: "AjaxTimeout",
-                  details: {
-                    url: url
-                  }
-                };
-              } else if (textStatus === "parsererror") {
-                error = {
-                  type: "AjaxError",
-                  details: {
-                    data: JSON.stringify(input)
-                  }
-                };
-              } else {
-                try {
-                  error = (_ref2 = JSON.parse(jqXHR.responseText).error) != null ? _ref2 : {
-                    type: "InvalidErrorResponse"
-                  };
-                } catch (_error) {
-                  e = _error;
-                  error = {
-                    type: "InvalidErrorResponse",
-                    details: e
-                  };
-                }
-              }
-              return rejectStatus(error);
-            }
-          };
-        })(this)
-      };
-      if (options.cache != null) {
-        ajaxOptions.cache = options.cache;
-      }
-      if (options.withCredentials === true) {
-        ajaxOptions.xhrFields = {
-          withCredentials: true
-        };
-      }
-      if (options.dataType != null) {
-        ajaxOptions.dataType = options.cache;
-      }
-      request = $.ajax(ajaxOptions);
-      status.abort = function() {
-        return request.abort();
-      };
-    } catch (_error) {
-      e = _error;
-      console.log("Unknown error during API call", e);
-      if ((request != null) && (request.abort != null)) {
-        request.abort();
-      }
-      rejectStatus({
-        type: "UnknownError",
-        details: e
-      });
-    }
-    return status;
-  };
-
   Api.prototype.call = function(subject, method, input, options) {
-    var ajaxRequest, apiCallKey, headers, status, url;
+    var apiCallKey, headers, request, status, url;
     if (options == null) {
       options = {};
     }
@@ -187,17 +220,18 @@ Api = (function() {
     headers.Authorization = "Bearer " + this.authToken;
     input = {
       headers: headers,
-      data: input
+      data: input,
+      maxRetries: this.maxAJAXTrials
     };
     if (options.withCredentials === true) {
       input.withCredentials = true;
     }
-    ajaxRequest = this._ajaxRequest(url, input);
+    request = ajaxRequest(url, input);
     status.abort = function() {
       this.aborted = true;
-      return ajaxRequest.abort();
+      return request.abort();
     };
-    ajaxRequest.done((function(_this) {
+    request.done((function(_this) {
       return function(data) {
         var error;
         if (status.aborted) {
@@ -332,11 +366,15 @@ module.exports = Api;
 
 
 
-},{}],2:[function(require,module,exports){
-window.DX = {
-  Api: require('./api.coffee')
-};
+},{"./ajax_request.coffee":1}],3:[function(require,module,exports){
+if (window.DX == null) {
+  window.DX = {};
+}
+
+window.DX.ajaxRequest = require('./ajax_request.coffee');
+
+window.DX.Api = require('./api.coffee');
 
 
 
-},{"./api.coffee":1}]},{},[2]);
+},{"./ajax_request.coffee":1,"./api.coffee":2}]},{},[3]);
