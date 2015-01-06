@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.8 (2015/01/06) ##
+- Fixing a rare condition where an AJAX request is automatically converted from POST to GET by jquery
+
 ## v0.0.7 (2014/12/18) ##
 - Addressing an issue where canceling large uploads in Firefox would exhaust the call stack.
 - Fixing examples so that the script included in each example directory matches the script reference in code
