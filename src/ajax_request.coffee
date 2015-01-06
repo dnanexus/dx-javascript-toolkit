@@ -7,6 +7,8 @@
 #         be defaulted to application/json. Anything else will be send literally.
 #   headers: An object containing header key/value pairs
 #   cache: A boolean which will turn of jquery caching if using jquery, else ignored
+#   contentType: The content type of the request data. This will be set to "application/json; charset=UTF-8" if data is an
+#                object, which is the default case.
 #   dataType: Passed straight through to jquery ajax if using jquery, else ignored
 #   ajaxDelay: Introduce a fixed delay before resolving the request. Useful for testing async scenarios
 #   maxRetries: The number of times to retry a request that failed due to connectivity issues. Default 5
@@ -24,6 +26,8 @@ ajaxRequest = (url, options = {}, trial = 0) ->
   ajaxDelay = options.ajaxDelay
   maxRetries = options.maxRetries ? 5
 
+  contentType = options.contentType
+
   request = null
 
   successStatusCodes = [200, 202, 206]
@@ -31,6 +35,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
   if data? && typeof data == "object" && options.skipConversion != true
     headers["Content-Type"] = "application/json"
     data = JSON.stringify(data)
+    contentType = "application/json; charset=UTF-8"
 
   resolveStatus = (data) ->
     if ajaxDelay?
@@ -48,10 +53,10 @@ ajaxRequest = (url, options = {}, trial = 0) ->
 
   try
     ajaxOptions =
-      url: url
+      data: data
       headers: headers
       type: method
-      data: data
+      url: url
 
       success: (data) ->
         resolveStatus(data)
@@ -97,15 +102,14 @@ ajaxRequest = (url, options = {}, trial = 0) ->
 
           rejectStatus(error)
 
-    if options.cache?
-      ajaxOptions.cache = options.cache
 
     if options.withCredentials == true
       ajaxOptions.xhrFields =
         withCredentials: true
 
-    if options.dataType?
-      ajaxOptions.dataType = options.dataType
+    ajaxOptions.cache = options.cache if options.cache?
+    ajaxOptions.contentType = contentType if contentType?
+    ajaxOptions.dataType = options.dataType if options.dataType?
 
     request = $.ajax(ajaxOptions)
 
