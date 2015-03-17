@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.9 (2015/03/17) ##
+- Passing the server error object through when 503 status codes are received
+
 ## v0.0.8 (2015/01/06) ##
 - Fixing a rare condition where an AJAX request is automatically converted from POST to GET by jquery
 
