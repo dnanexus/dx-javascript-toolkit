@@ -67,7 +67,8 @@ ajaxRequest = function(url, options, trial) {
           rejectStatus({
             type: "AjaxRetryTimeout",
             details: {
-              delay: retryDelay
+              delay: retryDelay,
+              serverError: JSON.parse(jqXHR.responseText).error
             }
           });
           return setTimeout(function() {
