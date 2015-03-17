@@ -68,7 +68,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10)
           retryDelay = 60 unless retryDelay? && isFinite(retryDelay) && retryDelay > 0
 
-          rejectStatus({type: "AjaxRetryTimeout", details: {delay: retryDelay}})
+          rejectStatus({type: "AjaxRetryTimeout", details: {delay: retryDelay, serverError: JSON.parse(jqXHR.responseText).error}})
 
           # Try again after the retry delay
           setTimeout(() ->
@@ -76,7 +76,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
           , retryDelay * 1000)
         else if textStatus == "error" && jqXHR.status == 0
           if trial > maxRetries
-            rejectStatus({ type: "AjaxError", details: {jqXHR: jqXHR}})
+            rejectStatus({type: "AjaxError", details: {jqXHR: jqXHR}})
           else
             trial += 1
             setTimeout(
