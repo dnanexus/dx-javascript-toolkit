@@ -135,7 +135,12 @@ class Api
     headers =
       "Content-MD5": md5Hash
 
-    originalCall = @call(fileID, "upload", {"index": part}, errors).done((results) ->
+    input =
+      index: part
+      md5sum: md5Hash
+      "content-length": slice.size
+
+    originalCall = @call(fileID, "upload", input, errors).done((results) ->
       # Merge the upload headers into our headers
       for k,v of results.headers
         headers[k] = v
