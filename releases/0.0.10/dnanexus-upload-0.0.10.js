@@ -301,8 +301,8 @@ Api = (function() {
     };
     input = {
       index: part,
-      md5sum: md5Hash,
-      "content-length": slice.size
+      md5Sum: md5Hash,
+      size: slice.size
     };
     originalCall = this.call(fileID, "upload", input, errors).done(function(results) {
       var ajaxCall, k, origAbort, v, _ref;

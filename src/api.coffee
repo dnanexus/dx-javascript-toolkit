@@ -137,8 +137,8 @@ class Api
 
     input =
       index: part
-      md5sum: md5Hash
-      "content-length": slice.size
+      md5Sum: md5Hash
+      size: slice.size
 
     originalCall = @call(fileID, "upload", input, errors).done((results) ->
       # Merge the upload headers into our headers
