@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.11 (2015/05/20) ##
+- Small tweak for the DNAnexus file upload API v2
+
 ## v0.0.10 (2015/05/12) ##
 - Adding support for the DNAnexus file upload API v2
 

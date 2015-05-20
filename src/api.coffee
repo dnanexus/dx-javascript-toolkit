@@ -137,7 +137,7 @@ class Api
 
     input =
       index: part
-      md5Sum: md5Hash
+      md5: md5Hash
       size: slice.size
 
     originalCall = @call(fileID, "upload", input, errors).done((results) ->
