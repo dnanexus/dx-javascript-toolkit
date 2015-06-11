@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.12 (2015/05/20) ##
+- Changes to api.uploadFilePart for compatibility with the DNAnexus file upload v2 API
+
 ## v0.0.11 (2015/05/20) ##
 - Small tweak for the DNAnexus file upload API v2
 
