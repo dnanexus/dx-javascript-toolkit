@@ -135,6 +135,11 @@ class Api
     headers =
       "Content-MD5": md5Hash
 
+    # Headers that we refuse to set, regardless of what comes back from the API server.
+    blacklistedHeaders =
+      "content-length": true
+      "origin": true
+
     input =
       index: part
       md5: md5Hash
@@ -142,8 +147,8 @@ class Api
 
     originalCall = @call(fileID, "upload", input, errors).done((results) ->
       # Merge the upload headers into our headers
-      for k,v of results.headers
-        headers[k] = v
+      for k, v of results.headers
+        headers[k] = v unless blacklistedHeaders[k.toLowerCase()]
 
       ajaxCall = $.ajax({
         url: results.url
@@ -160,7 +165,7 @@ class Api
           catch jsError
             deferred.reject(error)
 
-        type: "POST"
+        type: "PUT"
         xhr: () ->
           # Grab upload progress from XMLHttpRequest2 if available
           xhr = $.ajaxSettings.xhr()
