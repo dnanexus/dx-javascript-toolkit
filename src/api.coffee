@@ -129,8 +129,12 @@ class Api
       count++
     return count
 
-  uploadFilePart: (fileID, part, slice, md5Hash, errors) ->
-    deferred = $.Deferred()
+  #
+  # Note that the last two parameters are only used when dealing with errors. In
+  # normal use, status will be undefined
+  #
+  uploadFilePart: (fileID, part, slice, md5Hash, errors, attempt = 0, status) ->
+    deferred = status ? $.Deferred()
 
     headers =
       "Content-MD5": md5Hash
@@ -144,6 +148,22 @@ class Api
       index: part
       md5: md5Hash
       size: slice.size
+
+    onError = (error) =>
+      # Don't retry aborted uploads
+      return if deferred.__aborted
+
+      if attempt >= 8
+        deferred.reject(error)
+      else
+        # Try again shortly. There is no problem attempting an upload of the same part multiple times
+        delay = Math.pow(2, attempt) * 1000
+        console.warn("[Trial #{attempt + 1}] Error uploading #{fileID} part #{part} trying again in #{delay}ms")
+        console.warn(error)
+        retryHandler = () =>
+          @uploadFilePart(fileID, part, slice, md5Hash, errors, attempt + 1, deferred)
+
+        setTimeout(retryHandler, delay)
 
     originalCall = @call(fileID, "upload", input, errors).done((results) ->
       # Merge the upload headers into our headers
@@ -161,16 +181,15 @@ class Api
         error: (jqXHR, status, error) ->
           try
             errorType = JSON.parse(jqXHR.responseText).error.type
-            deferred.reject(errorType)
+            onError(errorType)
           catch jsError
-            deferred.reject(error)
+            onError(error)
 
         type: "PUT"
         xhr: () ->
           # Grab upload progress from XMLHttpRequest2 if available
           xhr = $.ajaxSettings.xhr()
           if xhr.upload?
-
             progressHandler = (e) ->
               if e.lengthComputable
                 # TODO: Change names?
@@ -191,12 +210,11 @@ class Api
         ajaxCall.abort()
         origAbort.call(originalCall)
 
-    ).fail((error) ->
-      deferred.reject(error)
-    )
+    ).fail(onError)
 
     # Delegate abort calls
     deferred.abort = () ->
+      deferred.__aborted = true
       originalCall.abort()
 
     return deferred

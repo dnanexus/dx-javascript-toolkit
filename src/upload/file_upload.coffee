@@ -246,7 +246,6 @@ class FileUpload
             @_closed = true
             @_closingProgress.resolve()
           )
-
         else
           setTimeout(doCloseFile, 1000)
       )
