@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.13 (2015/07/23) ##
+- Adding retry/backoff logic when uploading a file part. This adds resiliency when errors or network outages occur
+
 ## v0.0.12 (2015/05/20) ##
 - Changes to api.uploadFilePart for compatibility with the DNAnexus file upload v2 API
 
