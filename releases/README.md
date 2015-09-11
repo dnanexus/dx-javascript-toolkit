@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.14 (2015/09/11) ##
+- Adding bower.json for inclusion in bower.io packages
+- 
 ## v0.0.13 (2015/07/23) ##
 - Adding retry/backoff logic when uploading a file part. This adds resiliency when errors or network outages occur
 
