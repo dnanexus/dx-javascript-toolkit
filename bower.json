@@ -1,6 +1,9 @@
 {
   "name": "dx-javascript-toolkit",
   "description": "The DNAnexus Javascript Libraries are a collection of libraries that make it easy to integrate your javascript application with the DNAnexus platform.",
+  "main": [
+    "releases/latest/dnanexus-upload-0.0.13.js"
+  ],
   "dependencies": {
     "jquery": "~2.1",
     "operative": "~0.3.2",
