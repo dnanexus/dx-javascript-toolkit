@@ -1,0 +1,33 @@
+{
+  "name": "dx-javascript-toolkit",
+  "description": "The DNAnexus Javascript Libraries are a collection of libraries that make it easy to integrate your javascript application with the DNAnexus platform.",
+  "dependencies": {
+    "jquery": "~2.1",
+    "operative": "~0.3.2",
+    "SparkMD5": "~0.0.5"
+  },
+  "keywords": [
+    "dnanexus",
+    "genomics",
+    "dna",
+    "file",
+    "upload"
+  ],
+  "authors": [
+    "Evan Worley <evan@dnanexus.com>",
+    "Chris Meyer <cmeyer@dnanexus.com>",
+    "Fahd Butt <fahdoo@dnanexus.com>"
+  ],
+  "license": "Apache 2.0",
+  "ignore": [
+    "**/.*",
+    "*.md",
+    "Gruntfile.coffee",
+    "bower_components",
+    "docs",
+    "examples",
+    "node_modules",
+    "src",
+    "test"
+  ]
+}
