@@ -1,6 +1,6 @@
 {
   "name": "dx-javascript-toolkit",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "devDependencies": {
     "coffee-script": "~1.7.1",
     "grunt": "~0.4.5",
