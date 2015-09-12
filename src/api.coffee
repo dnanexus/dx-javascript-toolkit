@@ -143,6 +143,7 @@ class Api
     blacklistedHeaders =
       "content-length": true
       "origin": true
+      "host": true
 
     input =
       index: part

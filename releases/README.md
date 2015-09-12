@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.15 (2015/09/11) ##
+- Blacklisting host header
+
 ## v0.0.14 (2015/09/11) ##
 - Adding bower.json for inclusion in bower.io packages
 
