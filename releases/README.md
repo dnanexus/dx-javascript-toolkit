@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.16 (2016/06/14) ##
+- Allowing errors to pass on the DNAnexus custom "X-Request-ID" header
+
 ## v0.0.15 (2015/09/11) ##
 - Blacklisting host header
 
