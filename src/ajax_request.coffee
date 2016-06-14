@@ -58,7 +58,7 @@ ajaxRequest = (url, options = {}, trial = 0) ->
       type: method
       url: url
 
-      success: (data) ->
+      success: (data, textStatus, jqXHR) ->
         resolveStatus(data)
 
       # TODO: This doesn't distinguish between the API and auth server
@@ -99,6 +99,9 @@ ajaxRequest = (url, options = {}, trial = 0) ->
               error = JSON.parse(jqXHR.responseText).error ? {type: "InvalidErrorResponse"}
             catch e
               error = {type: "InvalidErrorResponse", details: e}
+
+          if error? && jqXHR.getResponseHeader("X-Request-ID")?
+            error.requestID = jqXHR.getResponseHeader("X-Request-ID")
 
           rejectStatus(error)
 
