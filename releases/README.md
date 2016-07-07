@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.17 (2016/07/07) ##
+- Added support for parameterized uploads, making the toolkit suitable for use with different cloud service providers
+
 ## v0.0.16 (2016/06/14) ##
 - Allowing errors to pass on the DNAnexus custom "X-Request-ID" header
 
