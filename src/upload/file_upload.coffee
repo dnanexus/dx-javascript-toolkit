@@ -1,6 +1,3 @@
-# AWS Constraint
-MAX_PARTS = 10000
-
 MB = Math.pow(1024, 2)
 
 class FileUpload
@@ -83,6 +80,12 @@ class FileUpload
   #   # Optional
   #   folder: The folder to upload the file into. Default: "/"
   #   partSize: The size of each part, in bytes. Default: 10485760
+  #   minimumPartSize: Minimum part size in bytes, applied to all parts except the last. Default: 5242880 (5 MiB)
+  #   maximumPartSize: Maximum part size in bytes. Default: 5368709120 (5 GiB)
+  #   maximumFileSize: Maximum overall size for a file in bytes. Default: 5497558138880 (5 TiB)
+  #   maximumNumParts: The maximum number of parts that may be uploaded. Default: 10000
+  #   emptyLastPartAllowed: If true, there must be at least one part but it may be zero bytes. If false,
+  #                         there may be no parts, but the minimum last part size is 1. Default: true
   #   tags: An array of strings that will be added as tags on the uploaded file
   #   properties: An object literal which will populate the properties of this uploaded file
   ###
@@ -91,13 +94,22 @@ class FileUpload
       folder: "/"
     }, options)
 
-    for key in ["folder", "partSize", "fileCreationPool", "workerPool", "uploadPool", "api", "projectID"]
+    for key in ["folder", "partSize", "fileCreationPool", "workerPool", "uploadPool", "api", "projectID",
+        "minimumPartSize", "maximumPartSize", "maximumFileSize", "maximumNumParts", "emptyLastPartAllowed"]
       if !options[key]?
         throw new Error("Required parameter #{key} is not specified")
       this[key] = options[key]
 
-    # Make sure we do not exceed MAX_PARTS
-    @partSize = Math.max(Math.ceil(@file.size / MAX_PARTS), @partSize)
+    # Make sure we do not exceed maximumNumParts
+    @partSize = Math.max(Math.ceil(@file.size / options.maximumNumParts), @partSize, @minimumPartSize)
+
+    if @partSize < @minimumPartSize
+      throw new Error("Part size is less than the minimum allowed! (#{@partSize} vs. #{@minimumPartSize})")
+    else if @partSize > @maximumPartSize
+      throw new Error("Part size is more than the maximum allowed! (#{@partSize} vs. #{@maximumPartSize})")
+
+    if @file.size > @maximumFileSize
+      throw new Error("File size for '#{@file.name}' is too large! (#{@file.size} vs. #{@maximumFileSize})")
 
     @_uploadProgress = $.Deferred()
     @_checksumProgress = $.Deferred()
@@ -114,7 +126,10 @@ class FileUpload
     @_closing = false
     @_closed = false
 
-    @numParts = Math.max(1, Math.ceil(@file.size / @partSize))
+    minParts = if @emptyLastPartAllowed then 1 else 0
+    @numParts = Math.max(minParts, Math.ceil(@file.size / @partSize))
+    if @numParts > @maximumNumParts
+      throw new Error("Too many parts for '#{@file.name}'! (#{@numParts} vs. #{@maximumNumParts})")
 
     @uploadStartedAt = null
 

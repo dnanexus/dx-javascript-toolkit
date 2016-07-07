@@ -25,6 +25,13 @@ class Upload
       apiServer: The host API server to use. Default: {host: "api.dnanexus.com", proto: https"}
       partSize: The chunk size for the uploads. Default: 10485760 (10MB)
 
+      minimumPartSize: Minimum part size in bytes, applied to all parts except the last. Default: 5242880 (5 MiB)
+      maximumPartSize: Maximum part size in bytes. Default: 5368709120 (5 GiB)
+      maximumFileSize: Maximum overall size for a file in bytes. Default: 5497558138880 (5 TiB)
+      maximumNumParts: The maximum number of parts that may be uploaded. Default: 10000
+      emptyLastPartAllowed: If true, there must be at least one part but it may be zero bytes. If false,
+                            there may be no parts, but the minimum last part size is 1. Default: true
+
       sparkMD5Src: The url/path to the sparkMD5 library. [required]
 
       checksumConcurrency: How many web workers to create to compute MD5s. Default: 10
@@ -36,7 +43,14 @@ class Upload
     throw new Error("projectID must be specified") unless options.projectID?.length > 0
     throw new Error("sparkMD5Src must be specified") unless options.sparkMD5Src?.length > 0
 
-    @partSize = options.partSize ? 10485760
+    # The following defaults are for AWS
+    @minimumPartSize = options.minimumPartSize ? 5242880 # 5 MiB
+    @maximumPartSize = options.maximumPartSize ? 5368709120 # 5 GiB
+    @maximumFileSize = options.maximumFileSize ? 5497558138880 # 5 TiB
+    @maximumNumParts = options.maxmimumNumParts ? 10000
+    @emptyLastPartAllowed = options.emptyLastPartAllowed ? true
+
+    @partSize = options.partSize ? Math.min(@maximumPartSize, 10485760)
     @folder = options.folder ? "/"
 
     checksumConcurrency = options.checksumConcurrency ? 10
@@ -62,6 +76,11 @@ class Upload
 
     defaultUploadOptions =
       partSize: @partSize
+      minimumPartSize: @minimumPartSize
+      maximumPartSize: @maximumPartSize
+      maximumFileSize: @maximumFileSize
+      maximumNumParts: @maximumNumParts
+      emptyLastPartAllowed: @emptyLastPartAllowed
       workerPool: @workerPool
       uploadPool: @uploadPool
       fileCreationPool: @fileCreationPool
