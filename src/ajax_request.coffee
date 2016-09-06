@@ -113,8 +113,10 @@ ajaxRequest = (url, options = {}, trial = 0) ->
     ajaxOptions.cache = options.cache if options.cache?
     ajaxOptions.contentType = contentType if contentType?
     ajaxOptions.dataType = options.dataType if options.dataType?
-
-    request = $.ajax(ajaxOptions)
+    if navigator.onLine
+      request = $.ajax(ajaxOptions)
+    else
+      status.reject({type: "InternetConnectionLost"})
 
     status.abort = () ->
       request.abort()
