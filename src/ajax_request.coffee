@@ -32,6 +32,9 @@ ajaxRequest = (url, options = {}, trial = 0) ->
 
   successStatusCodes = [200, 202, 206]
 
+  status.abort = () ->
+    request?.abort?()
+
   if data? && typeof data == "object" && options.skipConversion != true
     headers["Content-Type"] = "application/json"
     data = JSON.stringify(data)
@@ -113,17 +116,15 @@ ajaxRequest = (url, options = {}, trial = 0) ->
     ajaxOptions.cache = options.cache if options.cache?
     ajaxOptions.contentType = contentType if contentType?
     ajaxOptions.dataType = options.dataType if options.dataType?
+
     if navigator.onLine
       request = $.ajax(ajaxOptions)
     else
       status.reject({type: "InternetConnectionLost"})
 
-    status.abort = () ->
-      request.abort()
-
   catch e
     console.log("Unknown error during API call", e)
-    request.abort() if request? && request.abort?
+    status.abort()
     rejectStatus({type: "UnknownError", details: e})
 
   return status
