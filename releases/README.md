@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v0.0.18 (2016/09/07) ##
+- Added detection for when a user is offline; in this case, any AJAX call will be immediately rejected with an error of type "InternetConnectionLost"
+
 ## v0.0.17 (2016/07/07) ##
 - Added support for parameterized uploads, making the toolkit suitable for use with different cloud service providers
 

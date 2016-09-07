@@ -18,6 +18,9 @@ ajaxRequest = function(url, options, trial) {
   contentType = options.contentType;
   request = null;
   successStatusCodes = [200, 202, 206];
+  status.abort = function() {
+    return request != null ? typeof request.abort === "function" ? request.abort() : void 0 : void 0;
+  };
   if ((data != null) && typeof data === "object" && options.skipConversion !== true) {
     headers["Content-Type"] = "application/json";
     data = JSON.stringify(data);
@@ -141,16 +144,17 @@ ajaxRequest = function(url, options, trial) {
     if (options.dataType != null) {
       ajaxOptions.dataType = options.dataType;
     }
-    request = $.ajax(ajaxOptions);
-    status.abort = function() {
-      return request.abort();
-    };
+    if (navigator.onLine) {
+      request = $.ajax(ajaxOptions);
+    } else {
+      status.reject({
+        type: "InternetConnectionLost"
+      });
+    }
   } catch (_error) {
     e = _error;
     console.log("Unknown error during API call", e);
-    if ((request != null) && (request.abort != null)) {
-      request.abort();
-    }
+    status.abort();
     rejectStatus({
       type: "UnknownError",
       details: e
