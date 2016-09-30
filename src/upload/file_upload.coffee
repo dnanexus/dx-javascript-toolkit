@@ -11,7 +11,7 @@ class FileUpload
   # for the upload agent.
   #
   computeSignature: (file, partSize) ->
-    [file.size, file.lastModifiedDate.getTime(), 0, partSize, file.name].join(" ")
+    [file.size, file.lastModified, 0, partSize, file.name].join(" ")
 
   #
   # options:
