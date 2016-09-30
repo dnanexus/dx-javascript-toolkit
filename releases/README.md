@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## c0.0.19 (2016/09/30) ##
+- File.lastModifiedDate has been deprecated (to be replaced by File.lastModified). Safari 10.0 is the first to remove this property, breaking file uploads. v0.0.19 fixes this breakage.
+
 ## v0.0.18 (2016/09/07) ##
 - Added detection for when a user is offline; in this case, any AJAX call will be immediately rejected with an error of type "InternetConnectionLost"
 
