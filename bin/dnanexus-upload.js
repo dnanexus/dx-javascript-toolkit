@@ -2,7 +2,7 @@
 var ajaxRequest;
 
 ajaxRequest = function(url, options, trial) {
-  var ajaxDelay, ajaxOptions, data, e, headers, maxRetries, method, rejectStatus, request, resolveStatus, status, successStatusCodes, _ref, _ref1, _ref2;
+  var ajaxDelay, ajaxOptions, contentType, data, e, headers, maxRetries, method, rejectStatus, request, resolveStatus, status, successStatusCodes, _ref, _ref1, _ref2;
   if (options == null) {
     options = {};
   }
@@ -15,11 +15,16 @@ ajaxRequest = function(url, options, trial) {
   method = (_ref1 = options.method) != null ? _ref1 : "POST";
   ajaxDelay = options.ajaxDelay;
   maxRetries = (_ref2 = options.maxRetries) != null ? _ref2 : 5;
+  contentType = options.contentType;
   request = null;
   successStatusCodes = [200, 202, 206];
-  if ((data != null) && _.isObject(data) && options.skipConversion !== true) {
+  status.abort = function() {
+    return request != null ? typeof request.abort === "function" ? request.abort() : void 0 : void 0;
+  };
+  if ((data != null) && typeof data === "object" && options.skipConversion !== true) {
     headers["Content-Type"] = "application/json";
     data = JSON.stringify(data);
+    contentType = "application/json; charset=UTF-8";
   }
   resolveStatus = function(data) {
     if (ajaxDelay != null) {
@@ -48,24 +53,25 @@ ajaxRequest = function(url, options, trial) {
   };
   try {
     ajaxOptions = {
-      url: url,
+      data: data,
       headers: headers,
       type: method,
-      data: data,
-      success: function(data) {
+      url: url,
+      success: function(data, textStatus, jqXHR) {
         return resolveStatus(data);
       },
       error: function(jqXHR, textStatus, errorThrown) {
         var e, error, retryDelay, _ref3;
         if (jqXHR.status === 503) {
           retryDelay = parseInt(jqXHR.getResponseHeader("Retry-After"), 10);
-          if (!(_.isNumber(retryDelay) && !_.isNaN(retryDelay))) {
+          if (!((retryDelay != null) && isFinite(retryDelay) && retryDelay > 0)) {
             retryDelay = 60;
           }
           rejectStatus({
             type: "AjaxRetryTimeout",
             details: {
-              delay: retryDelay
+              delay: retryDelay,
+              serverError: JSON.parse(jqXHR.responseText).error
             }
           });
           return setTimeout(function() {
@@ -117,31 +123,38 @@ ajaxRequest = function(url, options, trial) {
               };
             }
           }
+          if ((error != null) && (jqXHR.getResponseHeader("X-Request-ID") != null)) {
+            error.requestID = jqXHR.getResponseHeader("X-Request-ID");
+          }
           return rejectStatus(error);
         }
       }
     };
-    if (options.cache != null) {
-      ajaxOptions.cache = options.cache;
-    }
     if (options.withCredentials === true) {
       ajaxOptions.xhrFields = {
         withCredentials: true
       };
     }
-    if (options.dataType != null) {
-      ajaxOptions.dataType = options.cache;
+    if (options.cache != null) {
+      ajaxOptions.cache = options.cache;
     }
-    request = $.ajax(ajaxOptions);
-    status.abort = function() {
-      return request.abort();
-    };
+    if (contentType != null) {
+      ajaxOptions.contentType = contentType;
+    }
+    if (options.dataType != null) {
+      ajaxOptions.dataType = options.dataType;
+    }
+    if (navigator.onLine) {
+      request = $.ajax(ajaxOptions);
+    } else {
+      status.reject({
+        type: "InternetConnectionLost"
+      });
+    }
   } catch (_error) {
     e = _error;
     console.log("Unknown error during API call", e);
-    if ((request != null) && (request.abort != null)) {
-      request.abort();
-    }
+    status.abort();
     rejectStatus({
       type: "UnknownError",
       details: e
@@ -287,20 +300,52 @@ Api = (function() {
     return count;
   };
 
-  Api.prototype.uploadFilePart = function(fileID, part, slice, md5Hash, errors) {
-    var deferred, headers, originalCall;
-    deferred = $.Deferred();
+  Api.prototype.uploadFilePart = function(fileID, part, slice, md5Hash, errors, attempt, status) {
+    var blacklistedHeaders, deferred, headers, input, onError, originalCall;
+    if (attempt == null) {
+      attempt = 0;
+    }
+    deferred = status != null ? status : $.Deferred();
     headers = {
       "Content-MD5": md5Hash
     };
-    originalCall = this.call(fileID, "upload", {
-      "index": part
-    }, errors).done(function(results) {
+    blacklistedHeaders = {
+      "content-length": true,
+      "origin": true,
+      "host": true
+    };
+    input = {
+      index: part,
+      md5: md5Hash,
+      size: slice.size
+    };
+    onError = (function(_this) {
+      return function(error) {
+        var delay, retryHandler;
+        if (deferred.__aborted) {
+          return;
+        }
+        if (attempt >= 8) {
+          return deferred.reject(error);
+        } else {
+          delay = Math.pow(2, attempt) * 1000;
+          console.warn("[Trial " + (attempt + 1) + "] Error uploading " + fileID + " part " + part + " trying again in " + delay + "ms");
+          console.warn(error);
+          retryHandler = function() {
+            return _this.uploadFilePart(fileID, part, slice, md5Hash, errors, attempt + 1, deferred);
+          };
+          return setTimeout(retryHandler, delay);
+        }
+      };
+    })(this);
+    originalCall = this.call(fileID, "upload", input, errors).done(function(results) {
       var ajaxCall, k, origAbort, v, _ref;
       _ref = results.headers;
       for (k in _ref) {
         v = _ref[k];
-        headers[k] = v;
+        if (!blacklistedHeaders[k.toLowerCase()]) {
+          headers[k] = v;
+        }
       }
       ajaxCall = $.ajax({
         url: results.url,
@@ -315,13 +360,13 @@ Api = (function() {
           var errorType, jsError;
           try {
             errorType = JSON.parse(jqXHR.responseText).error.type;
-            return deferred.reject(errorType);
+            return onError(errorType);
           } catch (_error) {
             jsError = _error;
-            return deferred.reject(error);
+            return onError(error);
           }
         },
-        type: "POST",
+        type: "PUT",
         xhr: function() {
           var doneHandler, progressHandler, xhr;
           xhr = $.ajaxSettings.xhr();
@@ -349,10 +394,9 @@ Api = (function() {
         ajaxCall.abort();
         return origAbort.call(originalCall);
       };
-    }).fail(function(error) {
-      return deferred.reject(error);
-    });
+    }).fail(onError);
     deferred.abort = function() {
+      deferred.__aborted = true;
       return originalCall.abort();
     };
     return deferred;
@@ -372,19 +416,48 @@ var ResourcePool;
 ResourcePool = (function() {
   function ResourcePool(_resources) {
     this._resources = _resources;
+    this.CLIENT_ID_LENGTH = 9;
     this._queue = [];
     this._closed = false;
+    this._clientRequests = {};
   }
 
-  ResourcePool.prototype.acquire = function() {
-    var resolver;
-    resolver = $.Deferred();
-    if (this._resources.length > 0 && !this._closed) {
-      resolver.resolve(this._resources.shift());
-    } else {
-      this._queue.push(resolver);
+  ResourcePool.prototype.acquireClientID = function(prefix) {
+    var id;
+    if (prefix == null) {
+      prefix = "";
     }
-    return resolver;
+    id = null;
+    while ((id == null) || (this._clientRequests[id] != null)) {
+      id = prefix + Math.round(Math.random() * Math.pow(10, this.CLIENT_ID_LENGTH));
+    }
+    this._clientRequests[id] = [];
+    return id;
+  };
+
+  ResourcePool.prototype.releaseClientID = function(clientID) {
+    var request, _i, _len, _ref, _ref1;
+    _ref1 = (_ref = this._clientRequests[clientID]) != null ? _ref : [];
+    for (_i = 0, _len = _ref1.length; _i < _len; _i++) {
+      request = _ref1[_i];
+      request.reject();
+    }
+    return delete this._clientRequests[clientID];
+  };
+
+  ResourcePool.prototype.acquire = function(clientID) {
+    var request, resource;
+    request = $.Deferred();
+    if (this._resources.length > 0 && !this._closed) {
+      resource = this._resources.shift();
+      request.resolve(resource);
+    } else {
+      this._queue.push(request);
+      if ((clientID != null) && (this._clientRequests[clientID] != null)) {
+        this._clientRequests[clientID].push(request);
+      }
+    }
+    return request;
   };
 
   ResourcePool.prototype.close = function() {
@@ -399,9 +472,16 @@ ResourcePool = (function() {
     }
   };
 
-  ResourcePool.prototype.release = function(resource) {
-    if (this._queue.length > 0 && !this._closed) {
-      return this._queue.shift().resolve(resource);
+  ResourcePool.prototype.release = function(resource, clientID) {
+    var request;
+    request = null;
+    if (!this._closed) {
+      while (this._queue.length > 0 && ((request == null) || request.state() !== "pending")) {
+        request = this._queue.shift();
+      }
+    }
+    if (request != null) {
+      return request.resolve(resource);
     } else {
       return this._resources.push(resource);
     }
@@ -420,6 +500,11 @@ ResourcePool = (function() {
       _results.push(this.release(resource));
     }
     return _results;
+  };
+
+  ResourcePool.prototype.clear = function() {
+    this._clientRequests = {};
+    return this._queue = [];
   };
 
   return ResourcePool;
@@ -444,14 +529,14 @@ window.DX.Upload = require('./upload/upload.coffee');
 
 
 },{"./ajax_request.coffee":1,"./api.coffee":2,"./upload/upload.coffee":7}],5:[function(require,module,exports){
-var FileUpload, MAX_PARTS,
+var FileUpload, MB,
   __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
-MAX_PARTS = 10000;
+MB = Math.pow(1024, 2);
 
 FileUpload = (function() {
   FileUpload.prototype.computeSignature = function(file, partSize) {
-    return [file.size, file.lastModifiedDate.getTime(), 0, partSize, file.name].join(" ");
+    return [file.size, file.lastModified, 0, partSize, file.name].join(" ");
   };
 
   FileUpload.prototype.createFile = function(file, api, partSize, projectID, options) {
@@ -501,12 +586,6 @@ FileUpload = (function() {
       };
     })(this);
     onSearchSuccess = function(data) {
-      return data;
-    };
-    onSearchFailure = function() {
-      return null;
-    };
-    onSearchSuccess = function(data) {
       if (data.results.length === 1) {
         return {
           fileID: data.results[0].id,
@@ -526,7 +605,7 @@ FileUpload = (function() {
   /*
    * options:
    *   # Required
-   *   file: The file to upload
+   *   file: The file to upload. Must be a logical file, not a directory.
    *   fileCreationPool: A ResourcePool for creating the files
    *   workerPool: A ResourcePool of web workers for MD5 computation
    *   uploadPool: A ResourcePool of upload tokens, for managing upload concurrency
@@ -536,12 +615,18 @@ FileUpload = (function() {
    *   # Optional
    *   folder: The folder to upload the file into. Default: "/"
    *   partSize: The size of each part, in bytes. Default: 10485760
-   *   tags: An array of strings that will be added as tags on all of the uploaded files
-   *   properties: An object literal which will populate the properties of all uploaded files.
+   *   minimumPartSize: Minimum part size in bytes, applied to all parts except the last. Default: 5242880 (5 MiB)
+   *   maximumPartSize: Maximum part size in bytes. Default: 5368709120 (5 GiB)
+   *   maximumFileSize: Maximum overall size for a file in bytes. Default: 5497558138880 (5 TiB)
+   *   maximumNumParts: The maximum number of parts that may be uploaded. Default: 10000
+   *   emptyLastPartAllowed: If true, there must be at least one part but it may be zero bytes. If false,
+   *                         there may be no parts, but the minimum last part size is 1. Default: true
+   *   tags: An array of strings that will be added as tags on the uploaded file
+   *   properties: An object literal which will populate the properties of this uploaded file
    */
 
   function FileUpload(file, options) {
-    var fileCreationOptions, key, _i, _len, _ref;
+    var fileCreationOptions, getServerFile, key, minParts, _i, _len, _ref;
     this.file = file;
     if (options == null) {
       options = {};
@@ -550,7 +635,7 @@ FileUpload = (function() {
     options = $.extend({
       folder: "/"
     }, options);
-    _ref = ["folder", "partSize", "fileCreationPool", "workerPool", "uploadPool", "api", "projectID"];
+    _ref = ["folder", "partSize", "fileCreationPool", "workerPool", "uploadPool", "api", "projectID", "minimumPartSize", "maximumPartSize", "maximumFileSize", "maximumNumParts", "emptyLastPartAllowed"];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       key = _ref[_i];
       if (options[key] == null) {
@@ -558,7 +643,15 @@ FileUpload = (function() {
       }
       this[key] = options[key];
     }
-    this.partSize = Math.max(Math.ceil(this.file.size / MAX_PARTS), this.partSize);
+    this.partSize = Math.max(Math.ceil(this.file.size / options.maximumNumParts), this.partSize, this.minimumPartSize);
+    if (this.partSize < this.minimumPartSize) {
+      throw new Error("Part size is less than the minimum allowed! (" + this.partSize + " vs. " + this.minimumPartSize + ")");
+    } else if (this.partSize > this.maximumPartSize) {
+      throw new Error("Part size is more than the maximum allowed! (" + this.partSize + " vs. " + this.maximumPartSize + ")");
+    }
+    if (this.file.size > this.maximumFileSize) {
+      throw new Error("File size for '" + this.file.name + "' is too large! (" + this.file.size + " vs. " + this.maximumFileSize + ")");
+    }
     this._uploadProgress = $.Deferred();
     this._checksumProgress = $.Deferred();
     this._closingProgress = $.Deferred();
@@ -569,48 +662,77 @@ FileUpload = (function() {
     this._aborted = false;
     this._closing = false;
     this._closed = false;
-    this.numParts = Math.max(1, Math.ceil(this.file.size / this.partSize));
+    minParts = this.emptyLastPartAllowed ? 1 : 0;
+    this.numParts = Math.max(minParts, Math.ceil(this.file.size / this.partSize));
+    if (this.numParts > this.maximumNumParts) {
+      throw new Error("Too many parts for '" + this.file.name + "'! (" + this.numParts + " vs. " + this.maximumNumParts + ")");
+    }
     this.uploadStartedAt = null;
     this._checksumQueue = [];
     this._uploadQueue = [];
     this._parts = [];
     this._partUploadProgress = [];
+    this._uploadPoolClientID = this.uploadPool.acquireClientID("file_upload_");
+    this._workerPoolClientID = this.workerPool.acquireClientID("file_worker_");
+    this.isDirectory = false;
     fileCreationOptions = {
       folder: this.folder,
       tags: options.tags,
       properties: options.properties
     };
     this.fileCreationStatus = $.Deferred();
-    this.fileCreationPool.acquire().done((function(_this) {
-      return function(createFileToken) {
-        return FileUpload.prototype.findOrCreateFile(file, _this.api, _this.partSize, _this.projectID, fileCreationOptions).done(function(data) {
-          var existingParts, i, part, start, _j, _ref1, _ref2, _ref3;
-          existingParts = (_ref1 = data.parts) != null ? _ref1 : {};
-          _this.fileID = data.fileID;
-          for (i = _j = 0, _ref2 = _this.numParts; 0 <= _ref2 ? _j < _ref2 : _j > _ref2; i = 0 <= _ref2 ? ++_j : --_j) {
-            start = _this.partSize * i;
-            part = {
-              index: i + 1,
-              start: start,
-              stop: Math.min(_this.file.size, start + _this.partSize)
-            };
-            _this._parts.push(part);
-            if (((_ref3 = existingParts[i + 1]) != null ? _ref3.state : void 0) === "complete") {
-              _this._uploadsDone += 1;
-              _this._bytesResumed += part.stop - part.start;
-            } else {
-              _this._checksumQueue.push(part);
+    getServerFile = (function(_this) {
+      return function() {
+        return _this.fileCreationPool.acquire().done(function(createFileToken) {
+          return FileUpload.prototype.findOrCreateFile(file, _this.api, _this.partSize, _this.projectID, fileCreationOptions).done(function(data) {
+            var existingParts, i, part, start, _j, _ref1, _ref2, _ref3;
+            existingParts = (_ref1 = data.parts) != null ? _ref1 : {};
+            _this.fileID = data.fileID;
+            for (i = _j = 0, _ref2 = _this.numParts; 0 <= _ref2 ? _j < _ref2 : _j > _ref2; i = 0 <= _ref2 ? ++_j : --_j) {
+              start = _this.partSize * i;
+              part = {
+                index: i + 1,
+                start: start,
+                stop: Math.min(_this.file.size, start + _this.partSize)
+              };
+              _this._parts.push(part);
+              if (((_ref3 = existingParts[i + 1]) != null ? _ref3.state : void 0) === "complete") {
+                _this._uploadsDone += 1;
+                _this._bytesResumed += part.stop - part.start;
+              } else {
+                _this._checksumQueue.push(part);
+              }
             }
-          }
-          _this._onUploadProgress();
-          return _this.fileCreationStatus.resolve(_this.fileID);
-        }).fail(function(error) {
-          return _this.fileCreationStatus.reject(error);
-        }).always(function() {
-          return _this.fileCreationPool.release(createFileToken);
+            _this._onUploadProgress();
+            return _this.fileCreationStatus.resolve(_this.fileID);
+          }).fail(function(error) {
+            return _this.fileCreationStatus.reject(error);
+          }).always(function() {
+            return _this.fileCreationPool.release(createFileToken);
+          });
         });
       };
-    })(this));
+    })(this);
+    if (this.file.size < 1 * MB) {
+      this.readBytes(0, 10).done(getServerFile).fail((function(_this) {
+        return function() {
+          var errorObject;
+          _this.isDirectory = true;
+          errorObject = {
+            error: {
+              type: "InvalidType",
+              message: "File is a directory and cannot be uploaded"
+            }
+          };
+          _this.fileCreationStatus.reject(errorObject);
+          _this._uploadProgress.reject(errorObject);
+          _this._checksumProgress.reject(errorObject);
+          return _this._closingProgress.reject(errorObject);
+        };
+      })(this));
+    } else {
+      getServerFile();
+    }
   }
 
   FileUpload.prototype._computeChecksums = function() {
@@ -622,7 +744,7 @@ FileUpload = (function() {
       part = this._checksumQueue.shift();
       _results.push((function(_this) {
         return function(part) {
-          return _this.workerPool.acquire().done(function(worker) {
+          return _this.workerPool.acquire(_this._workerPoolClientID).done(function(worker) {
             var slice, slicer, _ref, _ref1;
             if (_this._aborted) {
               _this.workerPool.release(worker);
@@ -718,13 +840,22 @@ FileUpload = (function() {
     }
   };
 
-  FileUpload.prototype._doUpload = function() {
+  FileUpload.prototype._closeIfDone = function() {
     if (this._uploadsDone === this.numParts && this._bytesUploaded + this._bytesResumed === this.file.size) {
       this._closeFile();
+      this.uploadPool.releaseClientID(this._uploadPoolClientID);
+      this.workerPool.releaseClientID(this._workerPoolClientID);
+      return true;
+    }
+    return false;
+  };
+
+  FileUpload.prototype._doUpload = function() {
+    if (this._closeIfDone()) {
       return;
     }
     if (this._uploadQueue.length > 0) {
-      return this.uploadPool.acquire().done((function(_this) {
+      return this.uploadPool.acquire(this._uploadPoolClientID).done((function(_this) {
         return function(token) {
           var abortPart, call, onUploadDone, origAbort, part;
           if (_this._uploadQueue.length === 0 || _this._aborted) {
@@ -733,7 +864,9 @@ FileUpload = (function() {
           }
           part = _this._uploadQueue.shift();
           _this._partUploadProgress[part.index] = 0;
-          _this.uploadStartedAt = Date.now();
+          if (_this.uploadStartedAt == null) {
+            _this.uploadStartedAt = Date.now();
+          }
           call = _this.api.uploadFilePart(_this.fileID, part.index, part.slice, part.md5);
           _this._uploadCalls[part.index] = call;
           call.progress(function(data) {
@@ -745,7 +878,7 @@ FileUpload = (function() {
               _this.uploadPool.release(token);
               token = null;
             }
-            return _this._doUpload();
+            return _this._closeIfDone();
           };
           abortPart = function() {
             _this._uploadQueue.unshift(part);
@@ -793,6 +926,8 @@ FileUpload = (function() {
       });
     }
     this._aborted = true;
+    this.uploadPool.releaseClientID(this._uploadPoolClientID);
+    this.workerPool.releaseClientID(this._workerPoolClientID);
     this._uploadQueue = [];
     _ref = this._uploadCalls;
     for (index in _ref) {
@@ -800,12 +935,14 @@ FileUpload = (function() {
       apiCall.abort();
     }
     this._uploadsCalls = {};
-    return this.api.call(this.projectID, "removeObjects", {
-      objects: [this.fileID]
-    }).then((function(_this) {
+    return this.fileCreationStatus.done((function(_this) {
       return function() {
-        _this._uploadProgress.reject();
-        return _this.fileID;
+        return _this.api.call(_this.projectID, "removeObjects", {
+          objects: [_this.fileID]
+        }).then(function() {
+          _this._uploadProgress.reject();
+          return _this.fileID;
+        });
       };
     })(this));
   };
@@ -840,17 +977,44 @@ FileUpload = (function() {
     Reads length bytes from the file, starting at offset. This is useful for clients who wish
     to perform some validation based on a small part of the file, typically the header.
   
-    file: An HTML5 File object
     offset: The byte offset into the file, 0 based
     length: The number of bytes to read from the file, starting at offset.
   
-    Returns a deferred object which will be resolved with an ArrayBuffer. Note, if offset is outside the file, the returned ArrayBuffer
-    will be empty. Also if offset + length is greater than the file size, the returned ArrayBuffer will have a byteLength less than the 
-    requested length
+    Returns a Deferred object which will be resolved with an ArrayBuffer. Note: if offset is
+    outside the file, the returned ArrayBuffer will be empty. Also if offset + length is
+    greater than the file size, the returned ArrayBuffer will have a byteLength less than the
+    requested length.
    */
 
   FileUpload.prototype.readBytes = function(offset, length) {
-    return alert("readBytes not yet supported");
+    var reader, slice, slicer, status, _ref, _ref1;
+    if (offset == null) {
+      offset = 0;
+    }
+    if (length == null) {
+      length = Infinity;
+    }
+    if (offset < 0) {
+      offset = Math.max(0, this.file.size + offset);
+    }
+    if (length < 0) {
+      length = 0;
+    }
+    status = $.Deferred();
+    slicer = (_ref = (_ref1 = this.file.slice) != null ? _ref1 : this.file.webkitSlice) != null ? _ref : this.file.mozSlice;
+    if (slicer == null) {
+      return status.reject("No slice function found for " + this.file.name);
+    }
+    slice = slicer.call(this.file, Math.min(this.file.size, offset), Math.min(this.file.size, offset + length));
+    reader = new FileReader();
+    reader.onload = function() {
+      return status.resolve(reader.result);
+    };
+    reader.onerror = function() {
+      return status.reject(reader.error);
+    };
+    reader.readAsArrayBuffer(slice);
+    return status;
   };
 
   return FileUpload;
@@ -958,13 +1122,20 @@ Upload = (function() {
       apiServer: The host API server to use. Default: {host: "api.dnanexus.com", proto: https"}
       partSize: The chunk size for the uploads. Default: 10485760 (10MB)
   
+      minimumPartSize: Minimum part size in bytes, applied to all parts except the last. Default: 5242880 (5 MiB)
+      maximumPartSize: Maximum part size in bytes. Default: 5368709120 (5 GiB)
+      maximumFileSize: Maximum overall size for a file in bytes. Default: 5497558138880 (5 TiB)
+      maximumNumParts: The maximum number of parts that may be uploaded. Default: 10000
+      emptyLastPartAllowed: If true, there must be at least one part but it may be zero bytes. If false,
+                            there may be no parts, but the minimum last part size is 1. Default: true
+  
       sparkMD5Src: The url/path to the sparkMD5 library. [required]
   
       checksumConcurrency: How many web workers to create to compute MD5s. Default: 10
       uploadConcurrency: The number of concurrent uploads to perform. Default: 10
    */
   function Upload(_authToken, files, options) {
-    var checksumConcurrency, i, uploadResources, _ref, _ref1, _ref2, _ref3, _ref4, _ref5;
+    var checksumConcurrency, i, uploadResources, _ref, _ref1, _ref10, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7, _ref8, _ref9;
     this._authToken = _authToken;
     this.files = files;
     if (options == null) {
@@ -977,10 +1148,15 @@ Upload = (function() {
     if (!(((_ref1 = options.sparkMD5Src) != null ? _ref1.length : void 0) > 0)) {
       throw new Error("sparkMD5Src must be specified");
     }
-    this.partSize = (_ref2 = options.partSize) != null ? _ref2 : 10485760;
-    this.folder = (_ref3 = options.folder) != null ? _ref3 : "/";
-    checksumConcurrency = (_ref4 = options.checksumConcurrency) != null ? _ref4 : 10;
-    this.uploadConcurrency = (_ref5 = options.uploadConcurrency) != null ? _ref5 : 10;
+    this.minimumPartSize = (_ref2 = options.minimumPartSize) != null ? _ref2 : 5242880;
+    this.maximumPartSize = (_ref3 = options.maximumPartSize) != null ? _ref3 : 5368709120;
+    this.maximumFileSize = (_ref4 = options.maximumFileSize) != null ? _ref4 : 5497558138880;
+    this.maximumNumParts = (_ref5 = options.maxmimumNumParts) != null ? _ref5 : 10000;
+    this.emptyLastPartAllowed = (_ref6 = options.emptyLastPartAllowed) != null ? _ref6 : true;
+    this.partSize = (_ref7 = options.partSize) != null ? _ref7 : Math.min(this.maximumPartSize, 10485760);
+    this.folder = (_ref8 = options.folder) != null ? _ref8 : "/";
+    checksumConcurrency = (_ref9 = options.checksumConcurrency) != null ? _ref9 : 10;
+    this.uploadConcurrency = (_ref10 = options.uploadConcurrency) != null ? _ref10 : 10;
     this.projectID = options.projectID;
     this.api = new Api(this._authToken, options);
     this.workers = (function() {
@@ -993,18 +1169,18 @@ Upload = (function() {
     })();
     this.workerPool = new ResourcePool(this.workers);
     uploadResources = (function() {
-      var _i, _ref6, _results;
+      var _i, _ref11, _results;
       _results = [];
-      for (i = _i = 0, _ref6 = this.uploadConcurrency; 0 <= _ref6 ? _i < _ref6 : _i > _ref6; i = 0 <= _ref6 ? ++_i : --_i) {
+      for (i = _i = 0, _ref11 = this.uploadConcurrency; 0 <= _ref11 ? _i < _ref11 : _i > _ref11; i = 0 <= _ref11 ? ++_i : --_i) {
         _results.push("UploadToken " + i);
       }
       return _results;
     }).call(this);
     this.uploadPool = new ResourcePool(uploadResources);
     this.fileCreationPool = new ResourcePool((function() {
-      var _i, _ref6, _results;
+      var _i, _ref11, _results;
       _results = [];
-      for (i = _i = 0, _ref6 = this.uploadConcurrency; 0 <= _ref6 ? _i < _ref6 : _i > _ref6; i = 0 <= _ref6 ? ++_i : --_i) {
+      for (i = _i = 0, _ref11 = this.uploadConcurrency; 0 <= _ref11 ? _i < _ref11 : _i > _ref11; i = 0 <= _ref11 ? ++_i : --_i) {
         _results.push("FileCreateToken " + i);
       }
       return _results;
@@ -1023,6 +1199,11 @@ Upload = (function() {
     this.uploads = [];
     defaultUploadOptions = {
       partSize: this.partSize,
+      minimumPartSize: this.minimumPartSize,
+      maximumPartSize: this.maximumPartSize,
+      maximumFileSize: this.maximumFileSize,
+      maximumNumParts: this.maximumNumParts,
+      emptyLastPartAllowed: this.emptyLastPartAllowed,
       workerPool: this.workerPool,
       uploadPool: this.uploadPool,
       fileCreationPool: this.fileCreationPool,
@@ -1069,6 +1250,9 @@ Upload = (function() {
     this.fileCreationPool.close();
     this.workerPool.close();
     this.uploadPool.close();
+    this.fileCreationPool.clear();
+    this.workerPool.clear();
+    this.uploadPool.clear();
     status = $.Deferred();
     count = 0;
     aborted = [];
@@ -1105,7 +1289,9 @@ Upload = (function() {
       worker.terminate();
     }
     this.workerPool.close();
-    return this.uploadPool.close();
+    this.uploadPool.close();
+    this.workerPool.clear();
+    return this.uploadPool.clear();
   };
 
 

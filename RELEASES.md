@@ -2,7 +2,10 @@
 
 All releases are backward compatible unless noted otherwise.
 
-## c0.0.19 (2016/09/30) ##
+## v1.0.0 (2016/12/13) ##
+- A bug in the FileUpload class meant that the uploadStartedAt property was being reset each time a chunk began uploading. It has now been fixed so that the property is set only once when the first chunk begins uploading. Some files and directories have also been moved or removed to make this repository's structure more consistent with other projects.
+
+## v0.0.19 (2016/09/30) ##
 - File.lastModifiedDate has been deprecated (to be replaced by File.lastModified). Safari 10.0 is the first to remove this property, breaking file uploads. v0.0.19 fixes this breakage.
 
 ## v0.0.18 (2016/09/07) ##
