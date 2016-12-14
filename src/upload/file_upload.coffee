@@ -309,7 +309,7 @@ class FileUpload
         # Begin tracking upload progress for this part, and make the API call
         @_partUploadProgress[part.index] = 0
 
-        @uploadStartedAt = Date.now()
+        @uploadStartedAt ?= Date.now()
         call = @api.uploadFilePart(@fileID, part.index, part.slice, part.md5)
         @_uploadCalls[part.index] = call
 
