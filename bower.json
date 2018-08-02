@@ -5,7 +5,7 @@
     "releases/latest/dnanexus-upload.js"
   ],
   "dependencies": {
-    "jquery": "~2.1",
+    "jquery": "~3.3",
     "operative": "~0.3.2",
     "SparkMD5": "~0.0.5"
   },

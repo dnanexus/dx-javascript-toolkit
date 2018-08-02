@@ -2,6 +2,9 @@
 
 All releases are backward compatible unless noted otherwise.
 
+## v1.1.0 (2018/08/02) ##
+- Updated required version of jQuery
+
 ## v1.0.0 (2016/12/13) ##
 - A bug in the FileUpload class meant that the uploadStartedAt property was being reset each time a chunk began uploading. It has now been fixed so that the property is set only once when the first chunk begins uploading. Some files and directories have also been moved or removed to make this repository's structure more consistent with other projects.
 
